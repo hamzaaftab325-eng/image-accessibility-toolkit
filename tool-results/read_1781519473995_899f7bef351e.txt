@@ -1,0 +1,1083 @@
+     1→---
+     2→name: Video Generation
+     3→description: Implement AI-powered video generation capabilities using the z-ai-web-dev-sdk. Use this skill when the user needs to generate videos from text prompts or images, create video content programmatically, or build applications that produce video outputs. Supports asynchronous task management with status polling and result retrieval.
+     4→license: MIT
+     5→---
+     6→
+     7→# Video Generation Skill
+     8→
+     9→This skill guides the implementation of video generation functionality using the z-ai-web-dev-sdk package, enabling AI models to create videos from text descriptions or images through asynchronous task processing.
+    10→
+    11→## Skills Path
+    12→
+    13→**Skill Location**: `{project_path}/skills/video-generation`
+    14→
+    15→This skill is located at the above path in your project.
+    16→
+    17→**Reference Scripts**: Example test scripts are available in the `{Skill Location}/scripts/` directory for quick testing and reference. See `{Skill Location}/scripts/video.ts` for a working example.
+    18→
+    19→## Overview
+    20→
+    21→Video Generation allows you to build applications that can create video content from text prompts or images, with customizable parameters like resolution, frame rate, duration, and quality settings. The API uses an asynchronous task model where you create a task and poll for results.
+    22→
+    23→**IMPORTANT**: z-ai-web-dev-sdk MUST be used in backend code only. Never use it in client-side code.
+    24→
+    25→## Prerequisites
+    26→
+    27→The z-ai-web-dev-sdk package is already installed. Import it as shown in the examples below.
+    28→
+    29→## CLI Usage (For Simple Tasks)
+    30→
+    31→For simple video generation tasks, you can use the z-ai CLI instead of writing code. The CLI handles task creation and polling automatically, making it ideal for quick tests and simple automation.
+    32→
+    33→### Basic Text-to-Video
+    34→
+    35→```bash
+    36→# Generate video with automatic polling
+    37→z-ai video --prompt "A cat playing with a ball" --poll
+    38→
+    39→# Using short options
+    40→z-ai video -p "Beautiful landscape with mountains" --poll
+    41→```
+    42→
+    43→### Custom Quality and Settings
+    44→
+    45→```bash
+    46→# Quality mode (speed or quality)
+    47→z-ai video -p "Ocean waves at sunset" --quality quality --poll
+    48→
+    49→# Custom resolution and FPS
+    50→z-ai video \
+    51→  -p "City timelapse" \
+    52→  --size "1920x1080" \
+    53→  --fps 60 \
+    54→  --poll
+    55→
+    56→# Custom duration (5 or 10 seconds)
+    57→z-ai video -p "Fireworks display" --duration 10 --poll
+    58→```
+    59→
+    60→### Image-to-Video
+    61→
+    62→**IMPORTANT**: For `image_url` parameter, it is **strongly recommended to use base64-encoded image data** instead of URLs. This approach is more reliable and avoids potential network issues or access restrictions.
+    63→
+    64→**Note**: Match the MIME type in the data URI to your actual image format (image/jpeg, image/png, image/webp, etc.) to avoid decoding issues.
+    65→
+    66→```bash
+    67→# Generate video from single image using base64 (RECOMMENDED)
+    68→# Convert your image to base64 with correct MIME type
+    69→
+    70→# For PNG images
+    71→IMAGE_BASE64=$(base64 -i image.png)
+    72→z-ai video \
+    73→  --image-url "data:image/png;base64,${IMAGE_BASE64}" \
+    74→  --prompt "Make the scene come alive" \
+    75→  --poll
+    76→
+    77→# For JPEG images
+    78→IMAGE_BASE64=$(base64 -i photo.jpg)
+    79→z-ai video \
+    80→  --image-url "data:image/jpeg;base64,${IMAGE_BASE64}" \
+    81→  --prompt "Make the scene come alive" \
+    82→  --poll
+    83→
+    84→# For WebP images
+    85→IMAGE_BASE64=$(base64 -i image.webp)
+    86→z-ai video \
+    87→  --image-url "data:image/webp;base64,${IMAGE_BASE64}" \
+    88→  --prompt "Make the scene come alive" \
+    89→  --poll
+    90→
+    91→# Using URL (less recommended, may have reliability issues)
+    92→z-ai video \
+    93→  -i "https://example.com/photo.jpg" \
+    94→  -p "Add motion to this scene" \
+    95→  --poll
+    96→```
+    97→
+    98→### First-Last Frame Mode
+    99→
+   100→**IMPORTANT**: For best reliability, use base64-encoded images instead of URLs. Ensure the MIME type matches your actual image format.
+   101→
+   102→```bash
+   103→# Generate video between two frames using base64 (RECOMMENDED)
+   104→# Make sure to use the correct MIME type for each image
+   105→
+   106→# Example with PNG images
+   107→START_BASE64=$(base64 -i start.png)
+   108→END_BASE64=$(base64 -i end.png)
+   109→z-ai video \
+   110→  --image-url "data:image/png;base64,${START_BASE64},data:image/png;base64,${END_BASE64}" \
+   111→  --prompt "Smooth transition between frames" \
+   112→  --poll
+   113→
+   114→# Example with JPEG images
+   115→START_BASE64=$(base64 -i start.jpg)
+   116→END_BASE64=$(base64 -i end.jpg)
+   117→z-ai video \
+   118→  --image-url "data:image/jpeg;base64,${START_BASE64},data:image/jpeg;base64,${END_BASE64}" \
+   119→  --prompt "Smooth transition between frames" \
+   120→  --poll
+   121→
+   122→# Using URLs (less recommended)
+   123→z-ai video \
+   124→  --image-url "https://example.com/start.png,https://example.com/end.png" \
+   125→  --prompt "Smooth transition between frames" \
+   126→  --poll
+   127→```
+   128→
+   129→### With Audio Generation
+   130→
+   131→```bash
+   132→# Generate video with AI-generated audio effects
+   133→z-ai video \
+   134→  -p "Thunder storm approaching" \
+   135→  --with-audio \
+   136→  --poll
+   137→```
+   138→
+   139→### Save Output
+   140→
+   141→```bash
+   142→# Save task result to JSON file
+   143→z-ai video \
+   144→  -p "Sunrise over mountains" \
+   145→  --poll \
+   146→  -o video_result.json
+   147→```
+   148→
+   149→### Custom Polling Parameters
+   150→
+   151→```bash
+   152→# Customize polling behavior
+   153→z-ai video \
+   154→  -p "Dancing robot" \
+   155→  --poll \
+   156→  --poll-interval 10 \
+   157→  --max-polls 30
+   158→
+   159→# Create task without polling (get task ID)
+   160→z-ai video -p "Abstract art animation" -o task.json
+   161→```
+   162→
+   163→### CLI Parameters
+   164→
+   165→- `--prompt, -p <text>`: Optional - Text description of the video
+   166→- `--image-url, -i <data>`: Optional - **Preferably base64-encoded image data** (e.g., "data:image/png;base64,iVBORw..."). URLs are also supported but less recommended. For two images, use comma-separated values.
+   167→- `--quality, -q <mode>`: Optional - Output mode: `speed` or `quality` (default: speed)
+   168→- `--with-audio`: Optional - Generate AI audio effects (default: false)
+   169→- `--size, -s <resolution>`: Optional - Video resolution (e.g., "1920x1080")
+   170→- `--fps <rate>`: Optional - Frame rate: 30 or 60 (default: 30)
+   171→- `--duration, -d <seconds>`: Optional - Duration: 5 or 10 seconds (default: 5)
+   172→- `--model, -m <model>`: Optional - Model name to use
+   173→- `--poll`: Optional - Auto-poll until task completes
+   174→- `--poll-interval <seconds>`: Optional - Polling interval (default: 5)
+   175→- `--max-polls <count>`: Optional - Maximum poll attempts (default: 60)
+   176→- `--output, -o <path>`: Optional - Output file path (JSON format)
+   177→
+   178→### Supported Resolutions
+   179→
+   180→- `1024x1024`
+   181→- `768x1344`
+   182→- `864x1152`
+   183→- `1344x768`
+   184→- `1152x864`
+   185→- `1440x720`
+   186→- `720x1440`
+   187→- `1920x1080` (and other standard resolutions)
+   188→
+   189→### Checking Task Status Later
+   190→
+   191→If you create a task without `--poll`, you can check its status later:
+   192→
+   193→```bash
+   194→# Get the task ID from the initial response
+   195→z-ai async-result --id "task-id-here" --poll
+   196→```
+   197→
+   198→### When to Use CLI vs SDK
+   199→
+   200→**Use CLI for:**
+   201→- Quick video generation tests
+   202→- Simple one-off video creation
+   203→- Command-line automation scripts
+   204→- Testing different prompts and settings
+   205→
+   206→**Use SDK for:**
+   207→- Batch video generation with custom logic
+   208→- Integration with web applications
+   209→- Custom task queue management
+   210→- Production applications with complex workflows
+   211→
+   212→## Video Generation Workflow
+   213→
+   214→Video generation follows a two-step asynchronous pattern:
+   215→
+   216→1. **Create Task**: Submit video generation request and receive a task ID
+   217→2. **Poll Results**: Query the task status until completion and retrieve the video URL
+   218→
+   219→## Basic Video Generation Implementation
+   220→
+   221→### Simple Text-to-Video Generation
+   222→
+   223→```javascript
+   224→import ZAI from 'z-ai-web-dev-sdk';
+   225→
+   226→async function generateVideo(prompt) {
+   227→  try {
+   228→    const zai = await ZAI.create();
+   229→
+   230→    // Create video generation task
+   231→    const task = await zai.video.generations.create({
+   232→      prompt: prompt,
+   233→      quality: 'speed', // 'speed' or 'quality'
+   234→      with_audio: false,
+   235→      size: '1920x1080',
+   236→      fps: 30,
+   237→      duration: 5
+   238→    });
+   239→
+   240→    console.log('Task ID:', task.id);
+   241→    console.log('Task Status:', task.task_status);
+   242→
+   243→    // Poll for results
+   244→    let result = await zai.async.result.query(task.id);
+   245→    let pollCount = 0;
+   246→    const maxPolls = 60;
+   247→    const pollInterval = 5000; // 5 seconds
+   248→
+   249→    while (result.task_status === 'PROCESSING' && pollCount < maxPolls) {
+   250→      pollCount++;
+   251→      console.log(`Polling ${pollCount}/${maxPolls}: Status is ${result.task_status}`);
+   252→      await new Promise(resolve => setTimeout(resolve, pollInterval));
+   253→      result = await zai.async.result.query(task.id);
+   254→    }
+   255→
+   256→    if (result.task_status === 'SUCCESS') {
+   257→      // Get video URL from multiple possible fields
+   258→      const videoUrl = result.video_result?.[0]?.url ||
+   259→                      result.video_url ||
+   260→                      result.url ||
+   261→                      result.video;
+   262→      console.log('Video URL:', videoUrl);
+   263→      return videoUrl;
+   264→    } else {
+   265→      console.log('Task failed or still processing');
+   266→      return null;
+   267→    }
+   268→  } catch (error) {
+   269→    console.error('Video generation failed:', error.message);
+   270→    throw error;
+   271→  }
+   272→}
+   273→
+   274→// Usage
+   275→const videoUrl = await generateVideo('A cat is playing with a ball.');
+   276→console.log('Generated video:', videoUrl);
+   277→```
+   278→
+   279→### Image-to-Video Generation
+   280→
+   281→**IMPORTANT**: The `image_url` parameter accepts both base64-encoded image data and URLs, but **base64 encoding is strongly recommended** for better reliability and to avoid network-related issues.
+   282→
+   283→**Critical**: Always match the MIME type in your base64 data URI to the actual image format to prevent decoding errors.
+   284→
+   285→```javascript
+   286→import ZAI from 'z-ai-web-dev-sdk';
+   287→import fs from 'fs';
+   288→import path from 'path';
+   289→
+   290→// Helper function to detect MIME type from file extension
+   291→function getMimeType(filePath) {
+   292→  const ext = path.extname(filePath).toLowerCase();
+   293→  const mimeTypes = {
+   294→    '.jpg': 'image/jpeg',
+   295→    '.jpeg': 'image/jpeg',
+   296→    '.png': 'image/png',
+   297→    '.gif': 'image/gif',
+   298→    '.webp': 'image/webp',
+   299→    '.bmp': 'image/bmp'
+   300→  };
+   301→  return mimeTypes[ext] || 'image/jpeg'; // Default to JPEG if unknown
+   302→}
+   303→
+   304→async function generateVideoFromImage(imagePath, prompt) {
+   305→  const zai = await ZAI.create();
+   306→
+   307→  // Method 1: Using base64-encoded image (RECOMMENDED)
+   308→  // Automatically detect MIME type from file extension
+   309→  const imageBuffer = fs.readFileSync(imagePath);
+   310→  const mimeType = getMimeType(imagePath);
+   311→  const base64Image = `data:${mimeType};base64,${imageBuffer.toString('base64')}`;
+   312→
+   313→  const task = await zai.video.generations.create({
+   314→    image_url: base64Image,  // Base64 data string with correct MIME type
+   315→    prompt: prompt,
+   316→    quality: 'quality',
+   317→    duration: 5,
+   318→    fps: 30
+   319→  });
+   320→
+   321→  return task;
+   322→}
+   323→
+   324→// Method 2: Using URL (less recommended)
+   325→async function generateVideoFromImageUrl(imageUrl, prompt) {
+   326→  const zai = await ZAI.create();
+   327→
+   328→  const task = await zai.video.generations.create({
+   329→    image_url: imageUrl,  // URL string
+   330→    prompt: prompt,
+   331→    quality: 'quality',
+   332→    duration: 5,
+   333→    fps: 30
+   334→  });
+   335→
+   336→  return task;
+   337→}
+   338→
+   339→// Usage examples
+   340→const task1 = await generateVideoFromImage(
+   341→  './images/photo.jpg',  // Works with JPEG
+   342→  'Animate this scene with gentle motion'
+   343→);
+   344→
+   345→const task2 = await generateVideoFromImage(
+   346→  './images/graphic.png',  // Works with PNG
+   347→  'Add dynamic movement'
+   348→);
+   349→
+   350→const task3 = await generateVideoFromImage(
+   351→  './images/animation.webp',  // Works with WebP
+   352→  'Bring this to life'
+   353→);
+   354→```
+   355→
+   356→### Image-to-Video with Start and End Frames
+   357→
+   358→**IMPORTANT**: For keyframe mode, base64-encoded images are **highly recommended** over URLs to ensure consistent and reliable video generation. Always use the correct MIME type for each image.
+   359→
+   360→```javascript
+   361→import ZAI from 'z-ai-web-dev-sdk';
+   362→import fs from 'fs';
+   363→import path from 'path';
+   364→
+   365→// Helper function to detect MIME type from file extension
+   366→function getMimeType(filePath) {
+   367→  const ext = path.extname(filePath).toLowerCase();
+   368→  const mimeTypes = {
+   369→    '.jpg': 'image/jpeg',
+   370→    '.jpeg': 'image/jpeg',
+   371→    '.png': 'image/png',
+   372→    '.gif': 'image/gif',
+   373→    '.webp': 'image/webp',
+   374→    '.bmp': 'image/bmp'
+   375→  };
+   376→  return mimeTypes[ext] || 'image/jpeg';
+   377→}
+   378→
+   379→async function generateVideoWithKeyframes(startImagePath, endImagePath, prompt) {
+   380→  const zai = await ZAI.create();
+   381→
+   382→  // Method 1: Using base64-encoded images (RECOMMENDED)
+   383→  // Automatically detect MIME type for each image
+   384→  const startBuffer = fs.readFileSync(startImagePath);
+   385→  const endBuffer = fs.readFileSync(endImagePath);
+   386→  
+   387→  const startMimeType = getMimeType(startImagePath);
+   388→  const endMimeType = getMimeType(endImagePath);
+   389→  
+   390→  const startBase64 = `data:${startMimeType};base64,${startBuffer.toString('base64')}`;
+   391→  const endBase64 = `data:${endMimeType};base64,${endBuffer.toString('base64')}`;
+   392→
+   393→  const task = await zai.video.generations.create({
+   394→    image_url: [startBase64, endBase64],  // Array of base64 strings with correct MIME types
+   395→    prompt: prompt,
+   396→    quality: 'quality',
+   397→    duration: 10,
+   398→    fps: 30
+   399→  });
+   400→
+   401→  console.log('Task created with keyframes:', task.id);
+   402→  return task;
+   403→}
+   404→
+   405→// Method 2: Using URLs (less recommended)
+   406→async function generateVideoWithKeyframesUrl(startImageUrl, endImageUrl, prompt) {
+   407→  const zai = await ZAI.create();
+   408→
+   409→  const task = await zai.video.generations.create({
+   410→    image_url: [startImageUrl, endImageUrl],  // Array of URL strings
+   411→    prompt: prompt,
+   412→    quality: 'quality',
+   413→    duration: 10,
+   414→    fps: 30
+   415→  });
+   416→
+   417→  console.log('Task created with keyframes:', task.id);
+   418→  return task;
+   419→}
+   420→
+   421→// Usage examples with different formats
+   422→const task1 = await generateVideoWithKeyframes(
+   423→  './frames/start.jpg',  // JPEG start frame
+   424→  './frames/end.jpg',    // JPEG end frame
+   425→  'Smooth transition between these scenes'
+   426→);
+   427→
+   428→const task2 = await generateVideoWithKeyframes(
+   429→  './frames/start.png',  // PNG start frame
+   430→  './frames/end.webp',   // WebP end frame - different formats work!
+   431→  'Morphing effect between images'
+   432→);
+   433→```
+   434→
+   435→## Asynchronous Result Management
+   436→
+   437→### Query Task Status
+   438→
+   439→```javascript
+   440→import ZAI from 'z-ai-web-dev-sdk';
+   441→
+   442→async function checkTaskStatus(taskId) {
+   443→  try {
+   444→    const zai = await ZAI.create();
+   445→    const result = await zai.async.result.query(taskId);
+   446→
+   447→    console.log('Task Status:', result.task_status);
+   448→
+   449→    if (result.task_status === 'SUCCESS') {
+   450→      // Extract video URL from result
+   451→      const videoUrl = result.video_result?.[0]?.url ||
+   452→                      result.video_url ||
+   453→                      result.url ||
+   454→                      result.video;
+   455→      if (videoUrl) {
+   456→        console.log('Video URL:', videoUrl);
+   457→        return { success: true, url: videoUrl };
+   458→      }
+   459→    } else if (result.task_status === 'PROCESSING') {
+   460→      console.log('Task is still processing');
+   461→      return { success: false, status: 'processing' };
+   462→    } else if (result.task_status === 'FAIL') {
+   463→      console.log('Task failed');
+   464→      return { success: false, status: 'failed' };
+   465→    }
+   466→  } catch (error) {
+   467→    console.error('Query failed:', error.message);
+   468→    throw error;
+   469→  }
+   470→}
+   471→
+   472→// Usage
+   473→const status = await checkTaskStatus('your-task-id-here');
+   474→```
+   475→
+   476→### Polling with Exponential Backoff
+   477→
+   478→```javascript
+   479→import ZAI from 'z-ai-web-dev-sdk';
+   480→
+   481→async function pollWithBackoff(taskId) {
+   482→  const zai = await ZAI.create();
+   483→  
+   484→  let pollInterval = 5000; // Start with 5 seconds
+   485→  const maxInterval = 30000; // Max 30 seconds
+   486→  const maxPolls = 40;
+   487→  let pollCount = 0;
+   488→
+   489→  while (pollCount < maxPolls) {
+   490→    const result = await zai.async.result.query(taskId);
+   491→    pollCount++;
+   492→
+   493→    if (result.task_status === 'SUCCESS') {
+   494→      const videoUrl = result.video_result?.[0]?.url ||
+   495→                      result.video_url ||
+   496→                      result.url ||
+   497→                      result.video;
+   498→      return { success: true, url: videoUrl };
+   499→    }
+   500→
+   501→    if (result.task_status === 'FAIL') {
+   502→      return { success: false, error: 'Task failed' };
+   503→    }
+   504→
+   505→    // Exponential backoff
+   506→    console.log(`Poll ${pollCount}: Waiting ${pollInterval / 1000}s...`);
+   507→    await new Promise(resolve => setTimeout(resolve, pollInterval));
+   508→    pollInterval = Math.min(pollInterval * 1.5, maxInterval);
+   509→  }
+   510→
+   511→  return { success: false, error: 'Timeout' };
+   512→}
+   513→```
+   514→
+   515→## Advanced Use Cases
+   516→
+   517→### Video Generation Queue Manager
+   518→
+   519→```javascript
+   520→import ZAI from 'z-ai-web-dev-sdk';
+   521→
+   522→class VideoGenerationQueue {
+   523→  constructor() {
+   524→    this.tasks = new Map();
+   525→  }
+   526→
+   527→  async initialize() {
+   528→    this.zai = await ZAI.create();
+   529→  }
+   530→
+   531→  async createVideo(params) {
+   532→    const task = await this.zai.video.generations.create(params);
+   533→    
+   534→    this.tasks.set(task.id, {
+   535→      taskId: task.id,
+   536→      status: task.task_status,
+   537→      params: params,
+   538→      createdAt: new Date()
+   539→    });
+   540→
+   541→    return task.id;
+   542→  }
+   543→
+   544→  async checkTask(taskId) {
+   545→    const result = await this.zai.async.result.query(taskId);
+   546→    
+   547→    const taskInfo = this.tasks.get(taskId);
+   548→    if (taskInfo) {
+   549→      taskInfo.status = result.task_status;
+   550→      taskInfo.lastChecked = new Date();
+   551→      
+   552→      if (result.task_status === 'SUCCESS') {
+   553→        taskInfo.videoUrl = result.video_result?.[0]?.url ||
+   554→                          result.video_url ||
+   555→                          result.url ||
+   556→                          result.video;
+   557→      }
+   558→    }
+   559→
+   560→    return result;
+   561→  }
+   562→
+   563→  async pollTask(taskId, options = {}) {
+   564→    const maxPolls = options.maxPolls || 60;
+   565→    const pollInterval = options.pollInterval || 5000;
+   566→    
+   567→    let pollCount = 0;
+   568→
+   569→    while (pollCount < maxPolls) {
+   570→      const result = await this.checkTask(taskId);
+   571→      
+   572→      if (result.task_status === 'SUCCESS' || result.task_status === 'FAIL') {
+   573→        return result;
+   574→      }
+   575→
+   576→      pollCount++;
+   577→      await new Promise(resolve => setTimeout(resolve, pollInterval));
+   578→    }
+   579→
+   580→    throw new Error('Task polling timeout');
+   581→  }
+   582→
+   583→  getTask(taskId) {
+   584→    return this.tasks.get(taskId);
+   585→  }
+   586→
+   587→  getAllTasks() {
+   588→    return Array.from(this.tasks.values());
+   589→  }
+   590→}
+   591→
+   592→// Usage
+   593→const queue = new VideoGenerationQueue();
+   594→await queue.initialize();
+   595→
+   596→const taskId = await queue.createVideo({
+   597→  prompt: 'A sunset over the ocean',
+   598→  quality: 'quality',
+   599→  duration: 5
+   600→});
+   601→
+   602→const result = await queue.pollTask(taskId);
+   603→console.log('Video ready:', result.video_result?.[0]?.url);
+   604→```
+   605→
+   606→### Batch Video Generation
+   607→
+   608→```javascript
+   609→import ZAI from 'z-ai-web-dev-sdk';
+   610→
+   611→async function generateMultipleVideos(prompts) {
+   612→  const zai = await ZAI.create();
+   613→  const tasks = [];
+   614→
+   615→  // Create all tasks
+   616→  for (const prompt of prompts) {
+   617→    const task = await zai.video.generations.create({
+   618→      prompt: prompt,
+   619→      quality: 'speed',
+   620→      duration: 5
+   621→    });
+   622→    tasks.push({ taskId: task.id, prompt: prompt });
+   623→  }
+   624→
+   625→  console.log(`Created ${tasks.length} video generation tasks`);
+   626→
+   627→  // Poll all tasks
+   628→  const results = [];
+   629→  for (const task of tasks) {
+   630→    const result = await pollTaskUntilComplete(zai, task.taskId);
+   631→    results.push({
+   632→      prompt: task.prompt,
+   633→      taskId: task.taskId,
+   634→      ...result
+   635→    });
+   636→  }
+   637→
+   638→  return results;
+   639→}
+   640→
+   641→async function pollTaskUntilComplete(zai, taskId) {
+   642→  let pollCount = 0;
+   643→  const maxPolls = 60;
+   644→
+   645→  while (pollCount < maxPolls) {
+   646→    const result = await zai.async.result.query(taskId);
+   647→    
+   648→    if (result.task_status === 'SUCCESS') {
+   649→      return {
+   650→        success: true,
+   651→        url: result.video_result?.[0]?.url ||
+   652→             result.video_url ||
+   653→             result.url ||
+   654→             result.video
+   655→      };
+   656→    }
+   657→
+   658→    if (result.task_status === 'FAIL') {
+   659→      return { success: false, error: 'Generation failed' };
+   660→    }
+   661→
+   662→    pollCount++;
+   663→    await new Promise(resolve => setTimeout(resolve, 5000));
+   664→  }
+   665→
+   666→  return { success: false, error: 'Timeout' };
+   667→}
+   668→
+   669→// Usage
+   670→const prompts = [
+   671→  'A cat playing with yarn',
+   672→  'A dog running in a park',
+   673→  'A bird flying in the sky'
+   674→];
+   675→
+   676→const videos = await generateMultipleVideos(prompts);
+   677→videos.forEach(video => {
+   678→  console.log(`${video.prompt}: ${video.success ? video.url : video.error}`);
+   679→});
+   680→```
+   681→
+   682→## Configuration Parameters
+   683→
+   684→### Video Generation Parameters
+   685→
+   686→| Parameter | Type | Required | Description | Default |
+   687→|-----------|------|----------|-------------|---------|
+   688→| `prompt` | string | Optional* | Text description of the video | - |
+   689→| `image_url` | string \| string[] | Optional* | Image URL(s) for generation | - |
+   690→| `quality` | string | Optional | Output mode: `'speed'` or `'quality'` | `'speed'` |
+   691→| `with_audio` | boolean | Optional | Generate AI audio effects | `false` |
+   692→| `size` | string | Optional | Video resolution (e.g., `'1920x1080'`) | - |
+   693→| `fps` | number | Optional | Frame rate: `30` or `60` | `30` |
+   694→| `duration` | number | Optional | Duration in seconds: `5` or `10` | `5` |
+   695→| `model` | string | Optional | Model name | - |
+   696→
+   697→*Note: At least one of `prompt` or `image_url` must be provided.
+   698→
+   699→### Image URL Formats
+   700→
+   701→```javascript
+   702→// Single image (starting frame)
+   703→image_url: 'https://example.com/image.jpg'
+   704→
+   705→// Multiple images (start and end frames)
+   706→image_url: [
+   707→  'https://example.com/start.jpg',
+   708→  'https://example.com/end.jpg'
+   709→]
+   710→```
+   711→
+   712→### Task Status Values
+   713→
+   714→- `PROCESSING`: Task is being processed
+   715→- `SUCCESS`: Task completed successfully
+   716→- `FAIL`: Task failed
+   717→
+   718→## Response Formats
+   719→
+   720→### Task Creation Response
+   721→
+   722→```json
+   723→{
+   724→  "id": "task-12345",
+   725→  "task_status": "PROCESSING",
+   726→  "model": "video-model-v1"
+   727→}
+   728→```
+   729→
+   730→### Task Query Response (Success)
+   731→
+   732→```json
+   733→{
+   734→  "task_status": "SUCCESS",
+   735→  "model": "video-model-v1",
+   736→  "request_id": "req-67890",
+   737→  "video_result": [
+   738→    {
+   739→      "url": "https://cdn.example.com/generated-video.mp4"
+   740→    }
+   741→  ]
+   742→}
+   743→```
+   744→
+   745→### Task Query Response (Processing)
+   746→
+   747→```json
+   748→{
+   749→  "task_status": "PROCESSING",
+   750→  "id": "task-12345",
+   751→  "model": "video-model-v1"
+   752→}
+   753→```
+   754→
+   755→## Best Practices
+   756→
+   757→### 1. Polling Strategy
+   758→
+   759→```javascript
+   760→// Recommended polling implementation
+   761→async function smartPoll(zai, taskId) {
+   762→  // Check immediately (some tasks complete fast)
+   763→  let result = await zai.async.result.query(taskId);
+   764→  
+   765→  if (result.task_status !== 'PROCESSING') {
+   766→    return result;
+   767→  }
+   768→
+   769→  // Start polling with reasonable intervals
+   770→  let interval = 5000; // 5 seconds
+   771→  let maxPolls = 60; // 5 minutes total
+   772→  
+   773→  for (let i = 0; i < maxPolls; i++) {
+   774→    await new Promise(resolve => setTimeout(resolve, interval));
+   775→    result = await zai.async.result.query(taskId);
+   776→    
+   777→    if (result.task_status !== 'PROCESSING') {
+   778→      return result;
+   779→    }
+   780→  }
+   781→  
+   782→  throw new Error('Task timeout');
+   783→}
+   784→```
+   785→
+   786→### 2. Error Handling
+   787→
+   788→```javascript
+   789→async function safeVideoGeneration(params) {
+   790→  try {
+   791→    const zai = await ZAI.create();
+   792→    
+   793→    // Validate parameters
+   794→    if (!params.prompt && !params.image_url) {
+   795→      throw new Error('Either prompt or image_url is required');
+   796→    }
+   797→    
+   798→    const task = await zai.video.generations.create(params);
+   799→    const result = await smartPoll(zai, task.id);
+   800→    
+   801→    if (result.task_status === 'SUCCESS') {
+   802→      const videoUrl = result.video_result?.[0]?.url ||
+   803→                      result.video_url ||
+   804→                      result.url ||
+   805→                      result.video;
+   806→      
+   807→      if (!videoUrl) {
+   808→        throw new Error('Video URL not found in response');
+   809→      }
+   810→      
+   811→      return {
+   812→        success: true,
+   813→        url: videoUrl,
+   814→        taskId: task.id
+   815→      };
+   816→    } else {
+   817→      return {
+   818→        success: false,
+   819→        error: 'Video generation failed',
+   820→        taskId: task.id
+   821→      };
+   822→    }
+   823→  } catch (error) {
+   824→    console.error('Video generation error:', error);
+   825→    return {
+   826→      success: false,
+   827→      error: error.message
+   828→    };
+   829→  }
+   830→}
+   831→```
+   832→
+   833→### 3. Resource Management
+   834→
+   835→- Cache the ZAI instance for multiple video generations
+   836→- Implement task ID storage for long-running operations
+   837→- Clean up completed tasks from your tracking system
+   838→- Implement timeout mechanisms to prevent infinite polling
+   839→
+   840→### 4. Quality vs Speed Trade-offs
+   841→
+   842→```javascript
+   843→// Fast generation for previews or high volume
+   844→const quickVideo = await zai.video.generations.create({
+   845→  prompt: 'A cat playing',
+   846→  quality: 'speed',
+   847→  duration: 5,
+   848→  fps: 30
+   849→});
+   850→
+   851→// High quality for final production
+   852→const qualityVideo = await zai.video.generations.create({
+   853→  prompt: 'A cat playing',
+   854→  quality: 'quality',
+   855→  duration: 10,
+   856→  fps: 60,
+   857→  size: '1920x1080'
+   858→});
+   859→```
+   860→
+   861→### 5. Security Considerations
+   862→
+   863→- Validate all user inputs before creating tasks
+   864→- Implement rate limiting for video generation endpoints
+   865→- Store and validate task IDs securely
+   866→- Never expose SDK credentials in client-side code
+   867→- Set reasonable timeouts for polling operations
+   868→
+   869→## Common Use Cases
+   870→
+   871→1. **Social Media Content**: Generate short video clips for posts and stories
+   872→2. **Marketing Materials**: Create product demonstration videos
+   873→3. **Education**: Generate visual explanations and tutorials
+   874→4. **Entertainment**: Create animated content from descriptions
+   875→5. **Prototyping**: Quick video mockups for presentations
+   876→6. **Game Development**: Generate cutscene or background videos
+   877→7. **Content Automation**: Bulk video generation for various purposes
+   878→
+   879→## Integration Examples
+   880→
+   881→### Express.js API Endpoint
+   882→
+   883→```javascript
+   884→import express from 'express';
+   885→import ZAI from 'z-ai-web-dev-sdk';
+   886→
+   887→const app = express();
+   888→app.use(express.json());
+   889→
+   890→let zaiInstance;
+   891→
+   892→async function initZAI() {
+   893→  zaiInstance = await ZAI.create();
+   894→}
+   895→
+   896→// Create video generation task
+   897→app.post('/api/video/create', async (req, res) => {
+   898→  try {
+   899→    const { prompt, image_url, quality, duration } = req.body;
+   900→
+   901→    if (!prompt && !image_url) {
+   902→      return res.status(400).json({ 
+   903→        error: 'Either prompt or image_url is required' 
+   904→      });
+   905→    }
+   906→
+   907→    // Note: image_url should preferably be base64-encoded image data
+   908→    // Format: "data:image/jpeg;base64,..." or array of such strings
+   909→    // URLs are also supported but less recommended
+   910→    const task = await zaiInstance.video.generations.create({
+   911→      prompt,
+   912→      image_url,  // Accepts base64 data or URL
+   913→      quality: quality || 'speed',
+   914→      duration: duration || 5,
+   915→      fps: 30
+   916→    });
+   917→
+   918→    res.json({
+   919→      success: true,
+   920→      taskId: task.id,
+   921→      status: task.task_status
+   922→    });
+   923→  } catch (error) {
+   924→    res.status(500).json({
+   925→      success: false,
+   926→      error: error.message
+   927→    });
+   928→  }
+   929→});
+   930→
+   931→// Query task status
+   932→app.get('/api/video/status/:taskId', async (req, res) => {
+   933→  try {
+   934→    const { taskId } = req.params;
+   935→    const result = await zaiInstance.async.result.query(taskId);
+   936→
+   937→    const response = {
+   938→      taskId: taskId,
+   939→      status: result.task_status
+   940→    };
+   941→
+   942→    if (result.task_status === 'SUCCESS') {
+   943→      response.videoUrl = result.video_result?.[0]?.url ||
+   944→                         result.video_url ||
+   945→                         result.url ||
+   946→                         result.video;
+   947→    }
+   948→
+   949→    res.json(response);
+   950→  } catch (error) {
+   951→    res.status(500).json({
+   952→      success: false,
+   953→      error: error.message
+   954→    });
+   955→  }
+   956→});
+   957→
+   958→initZAI().then(() => {
+   959→  app.listen(3000, () => {
+   960→    console.log('Video generation API running on port 3000');
+   961→  });
+   962→});
+   963→```
+   964→
+   965→### WebSocket Real-time Updates
+   966→
+   967→```javascript
+   968→import WebSocket from 'ws';
+   969→import ZAI from 'z-ai-web-dev-sdk';
+   970→
+   971→const wss = new WebSocket.Server({ port: 8080 });
+   972→let zaiInstance;
+   973→
+   974→async function initZAI() {
+   975→  zaiInstance = await ZAI.create();
+   976→}
+   977→
+   978→wss.on('connection', (ws) => {
+   979→  ws.on('message', async (message) => {
+   980→    try {
+   981→      const data = JSON.parse(message);
+   982→
+   983→      if (data.action === 'generate') {
+   984→        // Create task
+   985→        const task = await zaiInstance.video.generations.create(data.params);
+   986→        
+   987→        ws.send(JSON.stringify({
+   988→          type: 'task_created',
+   989→          taskId: task.id
+   990→        }));
+   991→
+   992→        // Poll for results and send updates
+   993→        pollAndNotify(ws, task.id);
+   994→      }
+   995→    } catch (error) {
+   996→      ws.send(JSON.stringify({
+   997→        type: 'error',
+   998→        message: error.message
+   999→      }));
+  1000→    }
+  1001→  });
+  1002→});
+  1003→
+  1004→async function pollAndNotify(ws, taskId) {
+  1005→  let pollCount = 0;
+  1006→  const maxPolls = 60;
+  1007→
+  1008→  while (pollCount < maxPolls) {
+  1009→    const result = await zaiInstance.async.result.query(taskId);
+  1010→    
+  1011→    ws.send(JSON.stringify({
+  1012→      type: 'status_update',
+  1013→      taskId: taskId,
+  1014→      status: result.task_status
+  1015→    }));
+  1016→
+  1017→    if (result.task_status === 'SUCCESS') {
+  1018→      ws.send(JSON.stringify({
+  1019→        type: 'complete',
+  1020→        taskId: taskId,
+  1021→        videoUrl: result.video_result?.[0]?.url ||
+  1022→                 result.video_url ||
+  1023→                 result.url ||
+  1024→                 result.video
+  1025→      }));
+  1026→      break;
+  1027→    }
+  1028→
+  1029→    if (result.task_status === 'FAIL') {
+  1030→      ws.send(JSON.stringify({
+  1031→        type: 'failed',
+  1032→        taskId: taskId
+  1033→      }));
+  1034→      break;
+  1035→    }
+  1036→
+  1037→    pollCount++;
+  1038→    await new Promise(resolve => setTimeout(resolve, 5000));
+  1039→  }
+  1040→}
+  1041→
+  1042→initZAI();
+  1043→```
+  1044→
+  1045→## Troubleshooting
+  1046→
+  1047→**Issue**: "SDK must be used in backend"
+  1048→- **Solution**: Ensure z-ai-web-dev-sdk is only imported and used in server-side code
+  1049→
+  1050→**Issue**: Task stays in PROCESSING status indefinitely
+  1051→- **Solution**: Implement proper timeout mechanisms and consider the video complexity and duration
+  1052→
+  1053→**Issue**: Video URL not found in response
+  1054→- **Solution**: Check multiple possible response fields (video_result, video_url, url, video) as shown in examples
+  1055→
+  1056→**Issue**: Task fails immediately
+  1057→- **Solution**: Verify that parameters meet requirements (valid prompt/image_url, supported values for quality/fps/duration)
+  1058→
+  1059→**Issue**: Slow video generation
+  1060→- **Solution**: Use 'speed' quality mode, reduce duration/fps, or consider simpler prompts
+  1061→
+  1062→**Issue**: Polling timeout
+  1063→- **Solution**: Increase maxPolls value or pollInterval based on video duration and quality settings
+  1064→
+  1065→## Performance Tips
+  1066→
+  1067→1. **Use appropriate quality settings**: Choose 'speed' for quick results, 'quality' for final production
+  1068→2. **Start with shorter durations**: Test with 5-second videos before generating longer content
+  1069→3. **Implement intelligent polling**: Use exponential backoff to reduce API calls
+  1070→4. **Cache ZAI instance**: Reuse the same instance for multiple video generations
+  1071→5. **Parallel processing**: Create multiple tasks simultaneously and poll them independently
+  1072→6. **Monitor and log**: Track task completion times to optimize your polling strategy
+  1073→
+  1074→## Remember
+  1075→
+  1076→- Always use z-ai-web-dev-sdk in backend code only
+  1077→- Video generation is asynchronous - always implement proper polling
+  1078→- Check multiple response fields for video URL to ensure compatibility
+  1079→- Implement timeouts to prevent infinite polling loops
+  1080→- Handle all three task statuses: PROCESSING, SUCCESS, and FAIL
+  1081→- Consider rate limits and implement appropriate delays between requests
+  1082→- The SDK is already installed - import as shown in examples
+  1083→
