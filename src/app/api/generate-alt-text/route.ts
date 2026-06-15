@@ -5,7 +5,6 @@ import { getZAI } from '@/lib/zai';
 export const maxDuration = 60;
 
 // ── Constants ────────────────────────────────────────────────────────────────
-const MAX_IMAGES = 15;
 const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4 MB
 const ALLOWED_MIME_TYPES = new Set([
   'image/png',
@@ -34,18 +33,13 @@ const ALT_TEXT_PROMPT =
 
 // Retry config for rate limits
 const MAX_RETRIES = 3;
-const RETRY_BASE_DELAY_MS = 2000; // Start with 2s, double each retry
+const RETRY_BASE_DELAY_MS = 2000;
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface AltTextResult {
   filename: string;
   altText: string;
   error?: string;
-}
-
-interface ValidationError {
-  filename: string;
-  error: string;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -70,24 +64,6 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
     binary += String.fromCharCode(...chunk);
   }
   return btoa(binary);
-}
-
-function validateFile(file: File): { mimeType: string } | { error: string } {
-  if (file.size === 0) {
-    return { error: 'File is empty' };
-  }
-  if (file.size > MAX_FILE_SIZE) {
-    return {
-      error: `File exceeds maximum size of ${MAX_FILE_SIZE / 1024 / 1024}MB`,
-    };
-  }
-  const mimeType = resolveMimeType(file);
-  if (!mimeType) {
-    return {
-      error: `Unsupported file type. Allowed: ${[...ALLOWED_MIME_TYPES].join(', ')}`,
-    };
-  }
-  return { mimeType };
 }
 
 function sleep(ms: number): Promise<void> {
@@ -174,82 +150,53 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   if (rawFiles.length === 0) {
     return NextResponse.json(
-      { error: 'No images provided. Upload up to 15 images in the "images" field.' },
+      { error: 'No images provided.' },
       { status: 400 }
     );
   }
 
+  // Get first valid file (frontend now sends one at a time)
   const files = rawFiles.filter(
     (entry): entry is File => entry instanceof File
   );
 
   if (files.length === 0) {
     return NextResponse.json(
-      { error: 'No valid image files found in the "images" field.' },
+      { error: 'No valid image files found.' },
       { status: 400 }
     );
   }
 
-  if (files.length > MAX_IMAGES) {
-    return NextResponse.json(
-      { error: `Too many images. Maximum is ${MAX_IMAGES}, received ${files.length}.` },
-      { status: 400 }
-    );
-  }
-
-  // Validate each file
-  const validated: { file: File; mimeType: string }[] = [];
-  const validationErrors: ValidationError[] = [];
-
-  for (const file of files) {
-    const result = validateFile(file);
-    if ('error' in result) {
-      validationErrors.push({ filename: file.name || 'unknown', error: result.error });
-    } else {
-      validated.push({ file, mimeType: result.mimeType });
-    }
-  }
-
-  // Initialize VLM
-  let zai: Awaited<ReturnType<typeof getZAI>>;
-  try {
-    zai = await getZAI();
-  } catch (err) {
-    console.error('[/api/generate-alt-text] ZAI init failed:', err);
-    return NextResponse.json(
-      { error: 'Failed to initialize the vision model service. Please check server configuration.' },
-      { status: 500 }
-    );
-  }
-
-  // Process images SEQUENTIALLY to avoid rate limits (429)
+  // Process each file (supports both single and batch)
+  const zai: Awaited<ReturnType<typeof getZAI>> = await getZAI();
   const results: AltTextResult[] = [];
 
-  for (let i = 0; i < validated.length; i++) {
-    const { file, mimeType } = validated[i];
+  for (const file of files) {
+    // Validate
+    if (file.size === 0) {
+      results.push({ filename: file.name, altText: '', error: 'File is empty' });
+      continue;
+    }
+    if (file.size > MAX_FILE_SIZE) {
+      results.push({ filename: file.name, altText: '', error: `File exceeds ${MAX_FILE_SIZE / 1024 / 1024}MB limit` });
+      continue;
+    }
 
+    const mimeType = resolveMimeType(file);
+    if (!mimeType) {
+      results.push({ filename: file.name, altText: '', error: 'Unsupported file type' });
+      continue;
+    }
+
+    // Generate alt text with retry
     try {
       const altText = await generateAltTextWithRetry(zai, file, mimeType);
       results.push({ filename: file.name, altText });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error generating alt text';
       console.error(`[alt-text] Failed for ${file.name}:`, message);
-      results.push({
-        filename: file.name,
-        altText: '',
-        error: message,
-      });
+      results.push({ filename: file.name, altText: '', error: message });
     }
-
-    // Add a small delay between images to prevent rate limiting
-    if (i < validated.length - 1) {
-      await sleep(500);
-    }
-  }
-
-  // Append validation errors
-  for (const ve of validationErrors) {
-    results.push({ filename: ve.filename, altText: '', error: ve.error });
   }
 
   return NextResponse.json({ results });

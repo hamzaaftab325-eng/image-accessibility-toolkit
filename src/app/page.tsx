@@ -514,7 +514,7 @@ export default function Home() {
     [processFiles]
   )
 
-  // ── Alt text generation ─────────────────────────────────────────────────────
+  // ── Alt text generation (one image at a time to avoid 502 timeout) ──────────
 
   const handleGenerateAltText = useCallback(async () => {
     if (altFiles.length === 0) {
@@ -526,55 +526,63 @@ export default function Home() {
     setAltProgress(0)
     setAltResults([])
 
-    try {
-      const formData = new FormData()
-      for (const uf of altFiles) {
+    const totalFiles = altFiles.length
+    const allResults: AltTextResult[] = []
+
+    for (let i = 0; i < altFiles.length; i++) {
+      const uf = altFiles[i]
+      setAltProgress(Math.round(((i) / totalFiles) * 100))
+
+      try {
+        const formData = new FormData()
         formData.append('images', uf.file)
-      }
 
-      // Progress based on file count
-      const totalFiles = altFiles.length
-      const progressInterval = setInterval(() => {
-        setAltProgress((prev) => Math.min(prev + 1, 90))
-      }, 1000)
-
-      const response = await fetch('/api/generate-alt-text', {
-        method: 'POST',
-        body: formData,
-      })
-
-      clearInterval(progressInterval)
-
-      if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`)
-      }
-
-      const data = await response.json()
-      const results = data.results || []
-      setAltResults(results)
-      setAltProgress(100)
-
-      const successCount = results.filter((r: AltTextResult) => r.altText && !r.error).length
-      const failCount = results.filter((r: AltTextResult) => r.error).length
-
-      if (failCount === 0) {
-        toast({
-          title: 'Success!',
-          description: `Generated alt text for all ${successCount} images`,
+        const response = await fetch('/api/generate-alt-text', {
+          method: 'POST',
+          body: formData,
         })
-      } else {
-        toast({
-          title: 'Partial Success',
-          description: `${successCount} succeeded, ${failCount} failed. Check results for details.`,
-          variant: 'destructive',
-        })
+
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.status}`)
+        }
+
+        const data = await response.json()
+        const results = data.results || []
+        allResults.push(...results)
+        setAltResults([...allResults])
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to generate alt text'
+        allResults.push({ filename: uf.file.name, altText: '', error: message })
+        setAltResults([...allResults])
       }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to generate alt text'
-      toast({ title: 'Error', description: message, variant: 'destructive' })
-    } finally {
-      setAltLoading(false)
+
+      // Small delay between requests to avoid rate limiting
+      if (i < altFiles.length - 1) {
+        await new Promise((r) => setTimeout(r, 300))
+      }
     }
+
+    setAltProgress(100)
+
+    const successCount = allResults.filter((r) => r.altText && !r.error).length
+    const failCount = allResults.filter((r) => r.error).length
+
+    if (failCount === 0) {
+      toast({
+        title: 'Success!',
+        description: `Generated alt text for all ${successCount} images`,
+      })
+    } else if (successCount > 0) {
+      toast({
+        title: 'Partial Success',
+        description: `${successCount} succeeded, ${failCount} failed. Check results for details.`,
+        variant: 'destructive',
+      })
+    } else {
+      toast({ title: 'Error', description: 'All images failed. Please try again.', variant: 'destructive' })
+    }
+
+    setAltLoading(false)
   }, [altFiles])
 
   const handleCopyAll = useCallback(async () => {
@@ -593,7 +601,7 @@ export default function Home() {
     }
   }, [altResults])
 
-  // ── Format conversion ───────────────────────────────────────────────────────
+  // ── Format conversion (one image at a time to avoid 502 timeout) ─────────────
 
   const handleConvertFormat = useCallback(async () => {
     if (convertFiles.length === 0) {
@@ -605,42 +613,47 @@ export default function Home() {
     setConvertProgress(0)
     setConvertResults([])
 
-    try {
-      const formData = new FormData()
-      for (const uf of convertFiles) {
+    const totalFiles = convertFiles.length
+    const allResults: ConvertResult[] = []
+
+    for (let i = 0; i < convertFiles.length; i++) {
+      const uf = convertFiles[i]
+      setConvertProgress(Math.round(((i) / totalFiles) * 100))
+
+      try {
+        const formData = new FormData()
         formData.append('images', uf.file)
+        formData.append('format', convertFormat)
+
+        const response = await fetch('/api/convert-format', {
+          method: 'POST',
+          body: formData,
+        })
+
+        if (!response.ok) {
+          throw new Error(`Server error: ${response.status}`)
+        }
+
+        const data = await response.json()
+        const results = data.results || []
+        allResults.push(...results)
+        setConvertResults([...allResults])
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to convert image'
+        toast({ title: `Error: ${uf.file.name}`, description: message, variant: 'destructive' })
       }
-      formData.append('format', convertFormat)
+    }
 
-      // Simulate progress
-      const progressInterval = setInterval(() => {
-        setConvertProgress((prev) => Math.min(prev + Math.random() * 15, 90))
-      }, 500)
+    setConvertProgress(100)
 
-      const response = await fetch('/api/convert-format', {
-        method: 'POST',
-        body: formData,
-      })
-
-      clearInterval(progressInterval)
-
-      if (!response.ok) {
-        throw new Error(`Server error: ${response.status}`)
-      }
-
-      const data = await response.json()
-      setConvertResults(data.results || [])
-      setConvertProgress(100)
+    if (allResults.length > 0) {
       toast({
         title: 'Success!',
-        description: `Converted ${data.results?.length || 0} images to ${convertFormat.toUpperCase()}`,
+        description: `Converted ${allResults.length} images to ${convertFormat.toUpperCase()}`,
       })
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to convert images'
-      toast({ title: 'Error', description: message, variant: 'destructive' })
-    } finally {
-      setConvertLoading(false)
     }
+
+    setConvertLoading(false)
   }, [convertFiles, convertFormat])
 
   // ── Total size stats for converter ──────────────────────────────────────────
