@@ -15,12 +15,14 @@ import {
   X,
   AlertCircle,
   ArrowRight,
-  Images,
   Type,
   Zap,
+  Eye,
+  FileDown,
+  Trash2,
 } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
@@ -46,6 +48,7 @@ interface UploadedFile {
 interface AltTextResult {
   filename: string
   altText: string
+  error?: string
 }
 
 interface ConvertResult {
@@ -139,8 +142,7 @@ function DropZone({
       e.preventDefault()
       e.stopPropagation()
       setIsDragOver(false)
-      if (disabled) return
-      if (e.dataTransfer.files?.length) {
+      if (!disabled && e.dataTransfer.files.length > 0) {
         onFilesSelected(e.dataTransfer.files)
       }
     },
@@ -153,32 +155,93 @@ function DropZone({
 
   const handleChange = useCallback(
     (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (e.target.files?.length) {
+      if (e.target.files && e.target.files.length > 0) {
         onFilesSelected(e.target.files)
+        e.target.value = ''
       }
-      // Reset input so re-selecting the same file works
-      e.target.value = ''
     },
     [onFilesSelected]
   )
 
+  if (files.length > 0) {
+    return (
+      <div className="space-y-3">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-0 font-medium">
+              {files.length} / {MAX_FILES} files
+            </Badge>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={onClear}
+            disabled={disabled}
+            className="h-7 text-xs text-muted-foreground hover:text-destructive gap-1"
+          >
+            <Trash2 className="size-3" />
+            Clear all
+          </Button>
+        </div>
+
+        <ScrollArea className="max-h-40">
+          <div className="flex flex-wrap gap-2">
+            {files.map((uf) => (
+              <div
+                key={uf.id}
+                className="relative group rounded-lg overflow-hidden border bg-muted/30 shadow-sm"
+              >
+                <img
+                  src={uf.preview}
+                  alt={uf.file.name}
+                  className="size-16 object-cover"
+                />
+                <Badge
+                  variant="secondary"
+                  className="absolute bottom-0.5 right-0.5 text-[8px] px-1 py-0 h-4 leading-none"
+                >
+                  {getFileExtension(uf.file.name)}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </ScrollArea>
+
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => inputRef.current?.click()}
+          disabled={disabled}
+          className="w-full border-dashed h-8 text-xs text-muted-foreground"
+        >
+          + Add more files
+        </Button>
+
+        <input
+          ref={inputRef}
+          type="file"
+          accept={ACCEPTED_TYPES.join(',')}
+          multiple
+          onChange={handleChange}
+          className="hidden"
+        />
+      </div>
+    )
+  }
+
   return (
-    <div className="space-y-3">
-      <div
-        onClick={handleClick}
+    <div>
+      <motion.div
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
-        className={`
-          relative cursor-pointer rounded-xl border-2 border-dashed transition-all duration-300
-          ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
-          ${
-            isDragOver
-              ? 'border-emerald-500 bg-emerald-50/80 dark:bg-emerald-950/30 scale-[1.01]'
-              : 'border-muted-foreground/25 hover:border-emerald-400 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20'
-          }
-          p-8 md:p-12 text-center
-        `}
+        onClick={handleClick}
+        animate={isDragOver ? { scale: 1.02, borderColor: '#10b981' } : { scale: 1, borderColor: '#e5e7eb' }}
+        className={`relative cursor-pointer rounded-xl border-2 border-dashed p-8 sm:p-10 text-center transition-colors duration-200 ${
+          isDragOver
+            ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-400'
+            : 'bg-muted/20 hover:bg-muted/40 border-muted-foreground/25'
+        }`}
       >
         <input
           ref={inputRef}
@@ -187,104 +250,36 @@ function DropZone({
           multiple
           onChange={handleChange}
           className="hidden"
-          disabled={disabled}
         />
-
         <motion.div
-          animate={isDragOver ? { scale: 1.1, y: -4 } : { scale: 1, y: 0 }}
-          transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+          animate={isDragOver ? { y: -5 } : { y: 0 }}
           className="flex flex-col items-center gap-3"
         >
-          <div
-            className={`rounded-full p-4 transition-colors duration-300 ${
-              isDragOver
-                ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-400'
-                : 'bg-muted text-muted-foreground'
-            }`}
-          >
-            <Upload className="size-8" />
+          <div className={`size-12 rounded-full flex items-center justify-center transition-colors ${
+            isDragOver ? 'bg-emerald-100 dark:bg-emerald-900/40' : 'bg-muted/50'
+          }`}>
+            <Upload className={`size-5 ${isDragOver ? 'text-emerald-600' : 'text-muted-foreground'}`} />
           </div>
           <div>
-            <p className="text-base font-semibold text-foreground">
-              {isDragOver ? 'Drop images here' : 'Drag & drop images here'}
+            <p className="text-sm font-medium text-foreground">
+              Drag & drop images here
             </p>
-            <p className="mt-1 text-sm text-muted-foreground">
+            <p className="text-xs text-muted-foreground mt-1">
               or <span className="text-emerald-600 font-medium underline underline-offset-2">browse files</span>
             </p>
           </div>
-          <p className="text-xs text-muted-foreground/70">
+          <p className="text-[11px] text-muted-foreground/60">
             PNG, JPEG, WebP, GIF, BMP, TIFF, AVIF · Up to {MAX_FILES} files · 4MB each
           </p>
         </motion.div>
-      </div>
-
-      {/* Selected files preview */}
-      <AnimatePresence>
-        {files.length > 0 && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: 'auto' }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2 }}
-          >
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-0">
-                  {files.length} / {MAX_FILES}
-                </Badge>
-                <span className="text-sm text-muted-foreground">files selected</span>
-              </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={(e) => {
-                  e.stopPropagation()
-                  onClear()
-                }}
-                disabled={disabled}
-                className="text-muted-foreground hover:text-destructive"
-              >
-                <X className="size-4 mr-1" />
-                Clear all
-              </Button>
-            </div>
-            <ScrollArea className="w-full">
-              <div className="flex gap-2 mt-3 pb-1">
-                {files.map((f) => (
-                  <motion.div
-                    key={f.id}
-                    initial={{ opacity: 0, scale: 0.8 }}
-                    animate={{ opacity: 1, scale: 1 }}
-                    exit={{ opacity: 0, scale: 0.8 }}
-                    className="relative shrink-0 group"
-                  >
-                    <div className="size-16 rounded-lg overflow-hidden border bg-muted">
-                      <img
-                        src={f.preview}
-                        alt={f.file.name}
-                        className="size-full object-cover"
-                      />
-                    </div>
-                    <Badge
-                      variant="secondary"
-                      className="absolute -top-1.5 -right-1.5 text-[10px] px-1 py-0 h-4 bg-emerald-600 text-white border-0"
-                    >
-                      {getFileExtension(f.file.name)}
-                    </Badge>
-                  </motion.div>
-                ))}
-              </div>
-            </ScrollArea>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      </motion.div>
     </div>
   )
 }
 
-// ─── Alt Text Result Card ────────────────────────────────────────────────────
+// ─── Alt Text Result Card (Image Left, Content Right) ────────────────────────
 
-function AltTextCard({ result, index }: { result: AltTextResult; index: number }) {
+function AltTextCard({ result, preview, index }: { result: AltTextResult; preview?: string; index: number }) {
   const [copied, setCopied] = useState(false)
   const hasError = !!result.error
   const hasAltText = !!result.altText
@@ -303,60 +298,90 @@ function AltTextCard({ result, index }: { result: AltTextResult; index: number }
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05, duration: 0.3 }}
+      transition={{ delay: index * 0.04, duration: 0.3 }}
     >
-      <Card className={`overflow-hidden hover:shadow-md transition-shadow duration-200 group ${hasError ? 'border-destructive/30' : ''}`}>
-        <CardContent className="p-4">
-          <div className="flex items-start gap-3">
-            <div className={`shrink-0 size-10 rounded-lg flex items-center justify-center ${hasError ? 'bg-destructive/10' : 'bg-emerald-50 dark:bg-emerald-950/40'}`}>
-              {hasError ? (
-                <AlertCircle className="size-5 text-destructive" />
-              ) : (
-                <Type className="size-5 text-emerald-600 dark:text-emerald-400" />
-              )}
-            </div>
-            <div className="flex-1 min-w-0 space-y-1.5">
-              <div className="flex items-center gap-2">
-                <p className="text-sm font-medium truncate text-foreground">{result.filename}</p>
-                <Badge variant="outline" className="text-[10px] shrink-0">
-                  {getFileExtension(result.filename)}
-                </Badge>
+      <div className={`rounded-xl border bg-card overflow-hidden transition-all duration-200 hover:shadow-md ${hasError ? 'border-destructive/30' : 'border-border/60'}`}>
+        <div className="flex flex-col sm:flex-row">
+          {/* Image thumbnail - left side */}
+          <div className="shrink-0 sm:w-32 md:w-40 h-28 sm:h-auto bg-muted/30 relative overflow-hidden">
+            {preview ? (
+              <img
+                src={preview}
+                alt={result.filename}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                {hasError ? (
+                  <AlertCircle className="size-8 text-destructive/50" />
+                ) : (
+                  <ImageIcon className="size-8 text-muted-foreground/30" />
+                )}
+              </div>
+            )}
+            <Badge
+              variant="secondary"
+              className="absolute top-2 left-2 text-[9px] px-1.5 py-0 h-5 leading-none font-semibold bg-black/60 text-white border-0"
+            >
+              {getFileExtension(result.filename)}
+            </Badge>
+          </div>
+
+          {/* Content - right side */}
+          <div className="flex-1 min-w-0 p-4 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <p className="text-sm font-semibold truncate text-foreground">{result.filename}</p>
                 {hasError && (
-                  <Badge variant="destructive" className="text-[10px] shrink-0">Failed</Badge>
+                  <Badge variant="destructive" className="text-[9px] shrink-0 px-1.5 h-5">Failed</Badge>
                 )}
               </div>
               {hasError ? (
-                <p className="text-sm text-destructive leading-relaxed">{result.error}</p>
+                <p className="text-xs text-destructive/80 leading-relaxed">{result.error}</p>
+              ) : hasAltText ? (
+                <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">{result.altText}</p>
               ) : (
-                <p className="text-sm text-muted-foreground leading-relaxed">{result.altText}</p>
+                <div className="flex items-center gap-2 text-muted-foreground/50">
+                  <Loader2 className="size-3 animate-spin" />
+                  <span className="text-xs">Generating...</span>
+                </div>
               )}
             </div>
             {hasAltText && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleCopy}
-                className="shrink-0 size-8 opacity-0 group-hover:opacity-100 transition-opacity"
-              >
-                {copied ? (
-                  <Check className="size-4 text-emerald-600" />
-                ) : (
-                  <Copy className="size-4" />
-                )}
-              </Button>
+              <div className="flex items-center justify-between mt-3 pt-2 border-t border-border/40">
+                <span className="text-[10px] text-muted-foreground/50">{result.altText.length} characters</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleCopy}
+                  className="h-7 text-xs gap-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                >
+                  {copied ? (
+                    <>
+                      <Check className="size-3" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="size-3" />
+                      Copy
+                    </>
+                  )}
+                </Button>
+              </div>
             )}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </motion.div>
   )
 }
 
-// ─── Convert Result Card ─────────────────────────────────────────────────────
+// ─── Convert Result Card (Image Left, Stats Right) ──────────────────────────
 
-function ConvertResultCard({ result, index }: { result: ConvertResult; index: number }) {
+function ConvertResultCard({ result, preview, index }: { result: ConvertResult; preview?: string; index: number }) {
   const sizeDiff = result.originalSize - result.convertedSize
   const sizeChangePercent = ((sizeDiff / result.originalSize) * 100).toFixed(1)
   const isSmaller = sizeDiff > 0
@@ -382,139 +407,163 @@ function ConvertResultCard({ result, index }: { result: ConvertResult; index: nu
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={{ opacity: 0, y: 15 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.05, duration: 0.3 }}
+      transition={{ delay: index * 0.04, duration: 0.3 }}
     >
-      <Card className="overflow-hidden hover:shadow-md transition-shadow duration-200">
-        <CardContent className="p-4">
-          <div className="flex items-center gap-3">
-            <div className="shrink-0 size-12 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center overflow-hidden">
+      <div className="rounded-xl border border-border/60 bg-card overflow-hidden transition-all duration-200 hover:shadow-md">
+        <div className="flex flex-col sm:flex-row">
+          {/* Converted image - left */}
+          <div className="shrink-0 sm:w-32 md:w-40 h-28 sm:h-auto bg-muted/30 relative overflow-hidden">
+            {preview ? (
               <img
-                src={`data:${result.mimeType};base64,${result.data}`}
+                src={preview}
                 alt={result.convertedFilename}
-                className="size-full object-cover"
+                className="w-full h-full object-cover"
               />
-            </div>
-            <div className="flex-1 min-w-0 space-y-1">
-              <p className="text-sm font-medium truncate">{result.convertedFilename}</p>
-              <div className="flex items-center gap-2 flex-wrap">
-                <span className="text-xs text-muted-foreground">
-                  {formatFileSize(result.originalSize)}
-                </span>
-                <ArrowRight className="size-3 text-muted-foreground" />
-                <span className="text-xs font-medium text-foreground">
-                  {formatFileSize(result.convertedSize)}
-                </span>
+            ) : (
+              <div className="w-full h-full flex items-center justify-center">
+                <FileImage className="size-8 text-muted-foreground/30" />
+              </div>
+            )}
+            <Badge
+              variant="secondary"
+              className="absolute top-2 left-2 text-[9px] px-1.5 py-0 h-5 leading-none font-semibold bg-black/60 text-white border-0"
+            >
+              {getFileExtension(result.convertedFilename)}
+            </Badge>
+          </div>
+
+          {/* Stats - right */}
+          <div className="flex-1 min-w-0 p-4 flex flex-col justify-between">
+            <div>
+              <p className="text-sm font-semibold truncate text-foreground mb-2">{result.convertedFilename}</p>
+              <div className="flex items-center gap-3 text-xs">
+                <span className="text-muted-foreground">{formatFileSize(result.originalSize)}</span>
+                <ArrowRight className="size-3 text-muted-foreground/40" />
+                <span className="font-medium text-foreground">{formatFileSize(result.convertedSize)}</span>
                 <Badge
                   variant="secondary"
-                  className={`text-[10px] border-0 ${
+                  className={`text-[10px] h-5 px-1.5 border-0 ${
                     isSmaller
                       ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400'
                       : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'
                   }`}
                 >
-                  {isSmaller ? '↓' : '↑'} {Math.abs(parseFloat(sizeChangePercent))}%
+                  {isSmaller ? '' : '+'}{sizeChangePercent}%
                 </Badge>
               </div>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleDownload}
-              className="shrink-0 gap-1.5 border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
-            >
-              <Download className="size-3.5" />
-              <span className="hidden sm:inline">Download</span>
-            </Button>
+            <div className="mt-3 pt-2 border-t border-border/40">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleDownload}
+                className="h-7 text-xs gap-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+              >
+                <FileDown className="size-3" />
+                Download
+              </Button>
+            </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
     </motion.div>
   )
 }
 
-// ─── Main Page ───────────────────────────────────────────────────────────────
+// ─── Main Page Component ────────────────────────────────────────────────────
 
 export default function Home() {
-  // Alt Text state
+  const [activeTab, setActiveTab] = useState('alt-text')
   const [altFiles, setAltFiles] = useState<UploadedFile[]>([])
-  const [altResults, setAltResults] = useState<AltTextResult[]>([])
   const [altLoading, setAltLoading] = useState(false)
   const [altProgress, setAltProgress] = useState(0)
-
-  // Convert state
+  const [altResults, setAltResults] = useState<AltTextResult[]>([])
   const [convertFiles, setConvertFiles] = useState<UploadedFile[]>([])
-  const [convertFormat, setConvertFormat] = useState('webp')
-  const [convertResults, setConvertResults] = useState<ConvertResult[]>([])
   const [convertLoading, setConvertLoading] = useState(false)
   const [convertProgress, setConvertProgress] = useState(0)
+  const [convertResults, setConvertResults] = useState<ConvertResult[]>([])
+  const [convertFormat, setConvertFormat] = useState('webp')
 
-  // ── File selection handler ──────────────────────────────────────────────────
+  // Map filename -> preview for result cards
+  const [altPreviews, setAltPreviews] = useState<Record<string, string>>({})
+  const [convertPreviews, setConvertPreviews] = useState<Record<string, string>>({})
 
-  const processFiles = useCallback(
-    (fileList: FileList, currentFiles: UploadedFile[]): UploadedFile[] => {
-      const newFiles: UploadedFile[] = []
-      const fileArray = Array.from(fileList)
+  const processFiles = useCallback((fileList: FileList, prev: UploadedFile[]): UploadedFile[] => {
+    const newFiles: UploadedFile[] = []
+    const totalAfter = prev.length + fileList.length
 
-      for (const file of fileArray) {
-        // Stop if we'd exceed the max
-        if (currentFiles.length + newFiles.length >= MAX_FILES) {
-          toast({
-            title: 'Maximum files reached',
-            description: `You can upload up to ${MAX_FILES} files at once`,
-            variant: 'destructive',
-          })
-          break
-        }
+    if (totalAfter > MAX_FILES) {
+      toast({
+        title: 'Too many files',
+        description: `Maximum ${MAX_FILES} files. You tried to add ${fileList.length} to ${prev.length} existing.`,
+        variant: 'destructive',
+      })
+      return prev
+    }
 
-        if (!ACCEPTED_TYPES.includes(file.type)) {
-          toast({
-            title: 'Invalid file type',
-            description: `${file.name} is not a supported image format`,
-            variant: 'destructive',
-          })
-          continue
-        }
+    for (let i = 0; i < fileList.length; i++) {
+      const file = fileList[i]
 
-        if (file.size > MAX_FILE_SIZE) {
-          toast({
-            title: 'File too large',
-            description: `${file.name} exceeds the 4MB limit`,
-            variant: 'destructive',
-          })
-          continue
-        }
-
-        newFiles.push({
-          file,
-          preview: URL.createObjectURL(file),
-          id: crypto.randomUUID(),
+      if (!ACCEPTED_TYPES.includes(file.type)) {
+        toast({
+          title: 'Invalid file type',
+          description: `${file.name} is not a supported image format`,
+          variant: 'destructive',
         })
+        continue
       }
 
-      return [...currentFiles, ...newFiles]
-    },
-    []
-  )
+      if (file.size > MAX_FILE_SIZE) {
+        toast({
+          title: 'File too large',
+          description: `${file.name} exceeds the 4MB limit`,
+          variant: 'destructive',
+        })
+        continue
+      }
+
+      newFiles.push({
+        file,
+        preview: URL.createObjectURL(file),
+        id: `${Date.now()}-${i}-${file.name}`,
+      })
+    }
+
+    return [...prev, ...newFiles]
+  }, [])
 
   const handleAltFilesSelected = useCallback(
     (fileList: FileList) => {
-      setAltFiles((prev) => processFiles(fileList, prev))
+      const newFiles = processFiles(fileList, altFiles)
+      setAltFiles(newFiles)
       setAltResults([])
+      // Build preview map
+      const previews: Record<string, string> = {}
+      newFiles.forEach((uf) => {
+        previews[uf.file.name] = uf.preview
+      })
+      setAltPreviews(previews)
     },
-    [processFiles]
+    [processFiles, altFiles]
   )
 
   const handleConvertFilesSelected = useCallback(
     (fileList: FileList) => {
-      setConvertFiles((prev) => processFiles(fileList, prev))
+      const newFiles = processFiles(fileList, convertFiles)
+      setConvertFiles(newFiles)
       setConvertResults([])
+      const previews: Record<string, string> = {}
+      newFiles.forEach((uf) => {
+        previews[uf.file.name] = uf.preview
+      })
+      setConvertPreviews(previews)
     },
-    [processFiles]
+    [processFiles, convertFiles]
   )
 
-  // ── Alt text generation (one image at a time to avoid 502 timeout) ──────────
+  // ── Alt text generation (one image at a time) ──────────────────────────────
 
   const handleGenerateAltText = useCallback(async () => {
     if (altFiles.length === 0) {
@@ -556,7 +605,6 @@ export default function Home() {
         setAltResults([...allResults])
       }
 
-      // Small delay between requests to avoid rate limiting
       if (i < altFiles.length - 1) {
         await new Promise((r) => setTimeout(r, 300))
       }
@@ -568,14 +616,11 @@ export default function Home() {
     const failCount = allResults.filter((r) => r.error).length
 
     if (failCount === 0) {
-      toast({
-        title: 'Success!',
-        description: `Generated alt text for all ${successCount} images`,
-      })
+      toast({ title: 'Success!', description: `Generated alt text for all ${successCount} images` })
     } else if (successCount > 0) {
       toast({
         title: 'Partial Success',
-        description: `${successCount} succeeded, ${failCount} failed. Check results for details.`,
+        description: `${successCount} succeeded, ${failCount} failed.`,
         variant: 'destructive',
       })
     } else {
@@ -589,19 +634,19 @@ export default function Home() {
     if (altResults.length === 0) return
     const successResults = altResults.filter((r) => r.altText && !r.error)
     if (successResults.length === 0) {
-      toast({ title: 'Nothing to copy', description: 'No successful alt texts to copy', variant: 'destructive' })
+      toast({ title: 'Nothing to copy', description: 'No successful alt texts', variant: 'destructive' })
       return
     }
-    const allText = successResults.map((r) => `${r.filename}:\n${r.altText}`).join('\n\n')
+    const allText = successResults.map((r) => r.altText).join('\n\n')
     try {
       await navigator.clipboard.writeText(allText)
-      toast({ title: 'All copied!', description: `${successResults.length} alt texts copied to clipboard` })
+      toast({ title: 'All copied!', description: `${successResults.length} alt texts copied` })
     } catch {
       toast({ title: 'Error', description: 'Failed to copy to clipboard', variant: 'destructive' })
     }
   }, [altResults])
 
-  // ── Format conversion (one image at a time to avoid 502 timeout) ─────────────
+  // ── Format conversion (one image at a time) ────────────────────────────────
 
   const handleConvertFormat = useCallback(async () => {
     if (convertFiles.length === 0) {
@@ -615,6 +660,7 @@ export default function Home() {
 
     const totalFiles = convertFiles.length
     const allResults: ConvertResult[] = []
+    const newPreviews: Record<string, string> = {}
 
     for (let i = 0; i < convertFiles.length; i++) {
       const uf = convertFiles[i]
@@ -637,6 +683,14 @@ export default function Home() {
         const data = await response.json()
         const results = data.results || []
         allResults.push(...results)
+
+        // Create preview for converted images
+        for (const r of results) {
+          if (r.data) {
+            newPreviews[r.convertedFilename] = `data:${r.mimeType};base64,${r.data}`
+          }
+        }
+        setConvertPreviews((prev) => ({ ...prev, ...newPreviews }))
         setConvertResults([...allResults])
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to convert image'
@@ -647,16 +701,11 @@ export default function Home() {
     setConvertProgress(100)
 
     if (allResults.length > 0) {
-      toast({
-        title: 'Success!',
-        description: `Converted ${allResults.length} images to ${convertFormat.toUpperCase()}`,
-      })
+      toast({ title: 'Success!', description: `Converted ${allResults.length} images to ${convertFormat.toUpperCase()}` })
     }
 
     setConvertLoading(false)
   }, [convertFiles, convertFormat])
-
-  // ── Total size stats for converter ──────────────────────────────────────────
 
   const totalOriginal = convertResults.reduce((s, r) => s + r.originalSize, 0)
   const totalConverted = convertResults.reduce((s, r) => s + r.convertedSize, 0)
@@ -668,387 +717,253 @@ export default function Home() {
     <div className="min-h-screen flex flex-col bg-background">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-40 w-full border-b bg-background/80 backdrop-blur-lg supports-[backdrop-filter]:bg-background/60">
-        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
+          <div className="flex items-center justify-between h-14">
             <div className="flex items-center gap-3">
-              <div className="flex size-9 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-sm">
-                <Sparkles className="size-5" />
-              </div>
+              <img src="/logo.svg" alt="AltForge" className="size-8 rounded-lg" />
               <div>
-                <h1 className="text-lg font-bold tracking-tight text-foreground">
+                <h1 className="text-base font-bold tracking-tight text-foreground">
                   AltForge
                 </h1>
-                <p className="hidden sm:block text-xs text-muted-foreground -mt-0.5">
-                  AI Alt Text & Image Format Converter
-                </p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
-              <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800">
-                <Zap className="size-3 mr-1" />
-                AI-Powered
-              </Badge>
-            </div>
+            <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800 text-[10px]">
+              <Zap className="size-3 mr-1" />
+              AI-Powered
+            </Badge>
           </div>
         </div>
       </header>
 
       {/* ── Main Content ───────────────────────────────────────────────────── */}
       <main className="flex-1 w-full">
-        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-6 md:py-10">
-          {/* Hero section */}
-          <div className="text-center mb-8 md:mb-10">
-            <motion.h2
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-foreground"
-            >
-              Transform your images with{' '}
-              <span className="text-emerald-600 dark:text-emerald-400">AI power</span>
-            </motion.h2>
-            <motion.p
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5, delay: 0.1 }}
-              className="mt-2 text-sm sm:text-base text-muted-foreground max-w-2xl mx-auto"
-            >
-              Generate descriptive alt text for accessibility and SEO, or convert your images
-              between formats with instant size optimization.
-            </motion.p>
-          </div>
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-6 md:py-8">
 
-          {/* Tabs */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-          >
-            <Tabs defaultValue="alt-text" className="w-full">
-              <div className="flex justify-center mb-6">
-                <TabsList className="bg-muted/60 p-1 rounded-xl">
-                  <TabsTrigger
-                    value="alt-text"
-                    className="rounded-lg gap-2 data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm px-4 sm:px-6"
-                  >
-                    <Type className="size-4" />
-                    <span className="hidden sm:inline">Alt Text</span> Generator
-                  </TabsTrigger>
-                  <TabsTrigger
-                    value="converter"
-                    className="rounded-lg gap-2 data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm px-4 sm:px-6"
-                  >
-                    <FileImage className="size-4" />
-                    <span className="hidden sm:inline">Format</span> Converter
-                  </TabsTrigger>
-                </TabsList>
-              </div>
+          {/* Tabbed interface */}
+          <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+            <TabsList className="grid w-full max-w-md mx-auto grid-cols-2 h-11 bg-muted/50">
+              <TabsTrigger value="alt-text" className="gap-2 text-sm data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
+                <Eye className="size-4" />
+                Alt Text Generator
+              </TabsTrigger>
+              <TabsTrigger value="converter" className="gap-2 text-sm data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
+                <FileDown className="size-4" />
+                Format Converter
+              </TabsTrigger>
+            </TabsList>
 
-              {/* ── Alt Text Tab ─────────────────────────────────────────────── */}
-              <TabsContent value="alt-text">
-                <Card className="border-0 shadow-lg shadow-emerald-500/5">
-                  <CardHeader className="pb-4">
-                    <div className="flex items-center justify-between flex-wrap gap-3">
-                      <div>
-                        <CardTitle className="flex items-center gap-2 text-lg">
-                          <Images className="size-5 text-emerald-600 dark:text-emerald-400" />
-                          AI Alt Text Generator
-                        </CardTitle>
-                        <CardDescription className="mt-1">
-                          Upload images and get AI-generated descriptive alt text for accessibility &amp; SEO
-                        </CardDescription>
-                      </div>
-                      {altResults.length > 0 && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={handleCopyAll}
-                          className="gap-1.5 border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
-                        >
-                          <Copy className="size-3.5" />
-                          Copy All
-                        </Button>
-                      )}
+            {/* ── Alt Text Generator Tab ─────────────────────────────────────── */}
+            <TabsContent value="alt-text" className="space-y-4">
+              {/* Upload area */}
+              <Card className="border-border/40 shadow-sm">
+                <CardContent className="p-5">
+                  <DropZone
+                    files={altFiles}
+                    onFilesSelected={handleAltFilesSelected}
+                    onClear={() => { setAltFiles([]); setAltResults([]) }}
+                    disabled={altLoading}
+                  />
+                </CardContent>
+              </Card>
+
+              {/* Generate button + progress */}
+              {altFiles.length > 0 && altResults.length === 0 && (
+                <div className="space-y-3">
+                  <Button
+                    size="lg"
+                    onClick={handleGenerateAltText}
+                    disabled={altLoading}
+                    className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/20 h-12 text-sm font-medium"
+                  >
+                    {altLoading ? (
+                      <>
+                        <Loader2 className="size-4 animate-spin" />
+                        Generating... {altProgress}%
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="size-4" />
+                        Generate Alt Text for {altFiles.length} Image{altFiles.length > 1 ? 's' : ''}
+                      </>
+                    )}
+                  </Button>
+                  {altLoading && <Progress value={altProgress} className="h-1.5" />}
+                </div>
+              )}
+
+              {/* Results */}
+              {altResults.length > 0 && (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-semibold text-foreground">Results</h3>
+                      <Badge variant="secondary" className="text-[10px] h-5">{altResults.length} images</Badge>
                     </div>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    {/* Drop zone */}
-                    <DropZone
-                      files={altFiles}
-                      onFilesSelected={handleAltFilesSelected}
-                      onClear={() => {
-                        setAltFiles([])
-                        setAltResults([])
-                      }}
-                      disabled={altLoading}
-                    />
-
-                    {/* Generate button */}
-                    {altFiles.length > 0 && altResults.length === 0 && (
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="flex justify-center"
+                    <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleCopyAll}
+                        className="h-8 text-xs gap-1.5"
                       >
-                        <Button
-                          size="lg"
-                          onClick={handleGenerateAltText}
-                          disabled={altLoading}
-                          className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/25 min-w-[200px]"
-                        >
-                          {altLoading ? (
-                            <>
-                              <Loader2 className="size-4 animate-spin" />
-                              Generating...
-                            </>
-                          ) : (
-                            <>
-                              <Sparkles className="size-4" />
-                              Generate Alt Text
-                            </>
-                          )}
-                        </Button>
-                      </motion.div>
-                    )}
+                        <Copy className="size-3" />
+                        Copy All
+                      </Button>
+                    </div>
+                  </div>
 
-                    {/* Progress */}
-                    {altLoading && (
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="space-y-2"
-                      >
-                        <div className="flex items-center justify-between text-sm text-muted-foreground">
-                          <span>Analyzing images with AI...</span>
-                          <span>{Math.round(altProgress)}%</span>
-                        </div>
-                        <Progress value={altProgress} className="h-2 [&>div]:bg-emerald-600" />
-                      </motion.div>
-                    )}
+                  <div className="space-y-3">
+                    {altResults.map((result, i) => (
+                      <AltTextCard
+                        key={result.filename + i}
+                        result={result}
+                        preview={altPreviews[result.filename]}
+                        index={i}
+                      />
+                    ))}
+                  </div>
 
-                    {/* Results */}
-                    {altResults.length > 0 && (
-                      <div className="space-y-3">
-                        <Separator />
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-sm font-semibold text-foreground">Results</h3>
-                          <Badge variant="secondary" className="text-xs bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border-0">
-                            {altResults.length} images
-                          </Badge>
-                        </div>
-                        <div className="grid gap-3 max-h-[500px] overflow-y-auto pr-1 custom-scrollbar">
-                          {altResults.map((result, i) => (
-                            <AltTextCard key={result.filename} result={result} index={i} />
-                          ))}
-                        </div>
-                        <div className="flex justify-center pt-2">
-                          <Button
-                            variant="outline"
-                            onClick={() => {
-                              setAltFiles([])
-                              setAltResults([])
-                            }}
-                            className="gap-2"
-                          >
-                            <RefreshCw className="size-4" />
-                            Start Over
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
-
-              {/* ── Format Converter Tab ─────────────────────────────────────── */}
-              <TabsContent value="converter">
-                <Card className="border-0 shadow-lg shadow-emerald-500/5">
-                  <CardHeader className="pb-4">
-                    <CardTitle className="flex items-center gap-2 text-lg">
-                      <FileImage className="size-5 text-emerald-600 dark:text-emerald-400" />
-                      Image Format Converter
-                    </CardTitle>
-                    <CardDescription>
-                      Convert images between formats and compare file sizes instantly
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-6">
-                    {/* Drop zone */}
-                    <DropZone
-                      files={convertFiles}
-                      onFilesSelected={handleConvertFilesSelected}
-                      onClear={() => {
-                        setConvertFiles([])
-                        setConvertResults([])
-                      }}
-                      disabled={convertLoading}
-                    />
-
-                    {/* Format selector + Convert button */}
-                    {convertFiles.length > 0 && convertResults.length === 0 && (
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="flex flex-col sm:flex-row items-center justify-center gap-3"
-                      >
-                        <div className="flex items-center gap-2">
-                          <span className="text-sm text-muted-foreground whitespace-nowrap">Convert to:</span>
-                          <Select value={convertFormat} onValueChange={setConvertFormat}>
-                            <SelectTrigger className="w-[140px]">
-                              <SelectValue />
-                            </SelectTrigger>
-                            <SelectContent>
-                              {FORMAT_OPTIONS.map((opt) => (
-                                <SelectItem key={opt.value} value={opt.value}>
-                                  {opt.label}
-                                </SelectItem>
-                              ))}
-                            </SelectContent>
-                          </Select>
-                        </div>
-                        <Button
-                          size="lg"
-                          onClick={handleConvertFormat}
-                          disabled={convertLoading}
-                          className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/25 min-w-[180px]"
-                        >
-                          {convertLoading ? (
-                            <>
-                              <Loader2 className="size-4 animate-spin" />
-                              Converting...
-                            </>
-                          ) : (
-                            <>
-                              <FileImage className="size-4" />
-                              Convert All
-                            </>
-                          )}
-                        </Button>
-                      </motion.div>
-                    )}
-
-                    {/* Progress */}
-                    {convertLoading && (
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        className="space-y-2"
-                      >
-                        <div className="flex items-center justify-between text-sm text-muted-foreground">
-                          <span>Converting images to {convertFormat.toUpperCase()}...</span>
-                          <span>{Math.round(convertProgress)}%</span>
-                        </div>
-                        <Progress value={convertProgress} className="h-2 [&>div]:bg-emerald-600" />
-                      </motion.div>
-                    )}
-
-                    {/* Results */}
-                    {convertResults.length > 0 && (
-                      <div className="space-y-4">
-                        <Separator />
-
-                        {/* Summary stats */}
-                        <div className="grid grid-cols-3 gap-3">
-                          <div className="rounded-lg bg-muted/50 p-3 text-center">
-                            <p className="text-xs text-muted-foreground">Original</p>
-                            <p className="text-sm font-semibold text-foreground">{formatFileSize(totalOriginal)}</p>
-                          </div>
-                          <div className="rounded-lg bg-muted/50 p-3 text-center">
-                            <p className="text-xs text-muted-foreground">Converted</p>
-                            <p className="text-sm font-semibold text-foreground">{formatFileSize(totalConverted)}</p>
-                          </div>
-                          <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 p-3 text-center">
-                            <p className="text-xs text-emerald-600 dark:text-emerald-400">Savings</p>
-                            <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
-                              {parseFloat(totalSavings) > 0 ? '-' : '+'}{totalSavings}%
-                            </p>
-                          </div>
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                          <h3 className="text-sm font-semibold text-foreground">Converted Files</h3>
-                          <Badge variant="secondary" className="text-xs bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border-0">
-                            {convertResults.length} files
-                          </Badge>
-                        </div>
-                        <div className="grid gap-3 max-h-[500px] overflow-y-auto pr-1 custom-scrollbar">
-                          {convertResults.map((result, i) => (
-                            <ConvertResultCard key={result.convertedFilename} result={result} index={i} />
-                          ))}
-                        </div>
-                        <div className="flex justify-center pt-2">
-                          <Button
-                            variant="outline"
-                            onClick={() => {
-                              setConvertFiles([])
-                              setConvertResults([])
-                            }}
-                            className="gap-2"
-                          >
-                            <RefreshCw className="size-4" />
-                            Start Over
-                          </Button>
-                        </div>
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </TabsContent>
-            </Tabs>
-          </motion.div>
-
-          {/* Info cards */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.5, delay: 0.4 }}
-            className="mt-8 grid sm:grid-cols-2 gap-4"
-          >
-            <Card className="border-0 bg-emerald-50/50 dark:bg-emerald-950/20">
-              <CardContent className="p-4 flex items-start gap-3">
-                <div className="shrink-0 size-8 rounded-full bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center">
-                  <Type className="size-4 text-emerald-600 dark:text-emerald-400" />
+                  <Button
+                    variant="outline"
+                    onClick={() => { setAltFiles([]); setAltResults([]) }}
+                    className="w-full gap-2 h-10 text-sm"
+                  >
+                    <RefreshCw className="size-4" />
+                    Start Over
+                  </Button>
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-foreground">Alt Text Generator</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    AI-powered descriptions that improve accessibility and search engine optimization for your images.
-                  </p>
+              )}
+
+              {/* Still generating more results */}
+              {altLoading && altResults.length > 0 && (
+                <div className="flex items-center justify-center gap-2 py-3 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  Processing image {altResults.length + 1}...
                 </div>
-              </CardContent>
-            </Card>
-            <Card className="border-0 bg-emerald-50/50 dark:bg-emerald-950/20">
-              <CardContent className="p-4 flex items-start gap-3">
-                <div className="shrink-0 size-8 rounded-full bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center">
-                  <FileImage className="size-4 text-emerald-600 dark:text-emerald-400" />
+              )}
+            </TabsContent>
+
+            {/* ── Format Converter Tab ───────────────────────────────────────── */}
+            <TabsContent value="converter" className="space-y-4">
+              {/* Upload area */}
+              <Card className="border-border/40 shadow-sm">
+                <CardContent className="p-5">
+                  <DropZone
+                    files={convertFiles}
+                    onFilesSelected={handleConvertFilesSelected}
+                    onClear={() => { setConvertFiles([]); setConvertResults([]) }}
+                    disabled={convertLoading}
+                  />
+                </CardContent>
+              </Card>
+
+              {/* Format selector + Convert button */}
+              {convertFiles.length > 0 && convertResults.length === 0 && (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-center gap-3">
+                    <span className="text-sm text-muted-foreground whitespace-nowrap">Convert to:</span>
+                    <Select value={convertFormat} onValueChange={setConvertFormat}>
+                      <SelectTrigger className="w-[140px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {FORMAT_OPTIONS.map((opt) => (
+                          <SelectItem key={opt.value} value={opt.value}>
+                            {opt.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <Button
+                    size="lg"
+                    onClick={handleConvertFormat}
+                    disabled={convertLoading}
+                    className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/20 h-12 text-sm font-medium"
+                  >
+                    {convertLoading ? (
+                      <>
+                        <Loader2 className="size-4 animate-spin" />
+                        Converting... {convertProgress}%
+                      </>
+                    ) : (
+                      <>
+                        <FileDown className="size-4" />
+                        Convert {convertFiles.length} Image{convertFiles.length > 1 ? 's' : ''} to {convertFormat.toUpperCase()}
+                      </>
+                    )}
+                  </Button>
+                  {convertLoading && <Progress value={convertProgress} className="h-1.5" />}
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-foreground">Format Converter</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">
-                    Convert between WebP, PNG, JPEG, AVIF and more. Optimize file sizes while maintaining quality.
-                  </p>
+              )}
+
+              {/* Conversion results */}
+              {convertResults.length > 0 && (
+                <div className="space-y-4">
+                  {/* Stats summary */}
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="rounded-lg border bg-card p-3 text-center">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Original</p>
+                      <p className="text-sm font-bold text-foreground mt-0.5">{formatFileSize(totalOriginal)}</p>
+                    </div>
+                    <div className="rounded-lg border bg-card p-3 text-center">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Converted</p>
+                      <p className="text-sm font-bold text-emerald-600 mt-0.5">{formatFileSize(totalConverted)}</p>
+                    </div>
+                    <div className="rounded-lg border bg-card p-3 text-center">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Saved</p>
+                      <p className="text-sm font-bold text-emerald-600 mt-0.5">{totalSavings}%</p>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    {convertResults.map((result, i) => (
+                      <ConvertResultCard
+                        key={result.convertedFilename + i}
+                        result={result}
+                        preview={convertPreviews[result.convertedFilename]}
+                        index={i}
+                      />
+                    ))}
+                  </div>
+
+                  <Button
+                    variant="outline"
+                    onClick={() => { setConvertFiles([]); setConvertResults([]) }}
+                    className="w-full gap-2 h-10 text-sm"
+                  >
+                    <RefreshCw className="size-4" />
+                    Start Over
+                  </Button>
                 </div>
-              </CardContent>
-            </Card>
-          </motion.div>
+              )}
+
+              {convertLoading && convertResults.length > 0 && (
+                <div className="flex items-center justify-center gap-2 py-3 text-sm text-muted-foreground">
+                  <Loader2 className="size-4 animate-spin" />
+                  Converting image {convertResults.length + 1}...
+                </div>
+              )}
+            </TabsContent>
+          </Tabs>
         </div>
       </main>
 
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
-      <footer className="mt-auto border-t bg-muted/30">
-        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-6">
+      <footer className="mt-auto border-t bg-muted/20">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-4">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
             <div className="flex items-center gap-2">
-              <Sparkles className="size-4 text-emerald-600 dark:text-emerald-400" />
-              <span className="text-sm font-medium text-foreground">AltForge</span>
+              <Sparkles className="size-3.5 text-emerald-600 dark:text-emerald-400" />
+              <span className="text-xs font-medium text-foreground">AltForge</span>
             </div>
-            <p className="text-xs text-muted-foreground text-center">
-              AI-powered image tools · Built with Next.js &amp; shadcn/ui
+            <p className="text-[11px] text-muted-foreground">
+              AI-powered image tools · Built with Next.js & shadcn/ui
             </p>
             <div className="flex items-center gap-1.5">
               <AlertCircle className="size-3 text-muted-foreground" />
-              <span className="text-xs text-muted-foreground">
-                All processing happens securely on the server
+              <span className="text-[11px] text-muted-foreground">
+                Processing happens securely on the server
               </span>
             </div>
           </div>

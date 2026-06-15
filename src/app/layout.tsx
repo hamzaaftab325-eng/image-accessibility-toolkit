@@ -14,24 +14,26 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Z.ai Code Scaffold - AI-Powered Development",
-  description: "Modern Next.js scaffold optimized for AI-powered development with Z.ai. Built with TypeScript, Tailwind CSS, and shadcn/ui.",
-  keywords: ["Z.ai", "Next.js", "TypeScript", "Tailwind CSS", "shadcn/ui", "AI development", "React"],
-  authors: [{ name: "Z.ai Team" }],
+  title: "AltForge - AI Alt Text & Image Format Converter",
+  description: "Generate AI-powered alt text for web accessibility and convert image formats instantly. Bulk upload up to 15 images.",
+  keywords: ["alt text", "accessibility", "image converter", "WebP", "AI", "SEO", "screen reader", "image format"],
+  authors: [{ name: "AltForge" }],
   icons: {
-    icon: "https://z-cdn.chatglm.cn/z-ai/static/logo.svg",
+    icon: [
+      { url: "/favicon-16.png", sizes: "16x16", type: "image/png" },
+      { url: "/favicon-32.png", sizes: "32x32", type: "image/png" },
+    ],
+    apple: "/apple-touch-icon.png",
   },
   openGraph: {
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
-    url: "https://chat.z.ai",
-    siteName: "Z.ai",
+    title: "AltForge - AI Alt Text & Image Format Converter",
+    description: "Generate AI-powered alt text for accessibility and convert image formats.",
     type: "website",
   },
   twitter: {
-    card: "summary_large_image",
-    title: "Z.ai Code Scaffold",
-    description: "AI-powered development with modern React stack",
+    card: "summary",
+    title: "AltForge - AI Alt Text & Image Format Converter",
+    description: "Generate AI-powered alt text for accessibility and convert image formats.",
   },
 };
 
