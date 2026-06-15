@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getZAI, generateAltTextDirect, isVercel } from '@/lib/zai';
 
-// ── Config ──────────────────────────────────────────────────────────────────
-export const maxDuration = 10; // Hobby tier max is 10s
+// Vercel Hobby tier default is 10s — no explicit maxDuration needed
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4 MB

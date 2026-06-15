@@ -1,41 +1,51 @@
-import ZAI from 'z-ai-web-dev-sdk';
-import { existsSync, writeFileSync } from 'fs';
-import { join } from 'path';
-import { homedir } from 'os';
-import { tmpdir } from 'os';
+import type ZAI from 'z-ai-web-dev-sdk';
 
 // Singleton instance - cache across requests
 let zaiInstance: ZAI | null = null;
 
 /**
- * All possible config file locations (same as SDK's internal logic).
+ * Lazy-load the ZAI SDK (avoids top-level fs/path/os imports that can
+ * cause issues during Vercel's build phase).
  */
-const CONFIG_PATHS = [
-  join(process.cwd(), '.z-ai-config'),
-  join(homedir(), '.z-ai-config'),
-  '/etc/.z-ai-config',
-];
+async function loadZAI(): Promise<typeof ZAI> {
+  return (await import('z-ai-web-dev-sdk')).default;
+}
+
+/**
+ * All possible config file locations (same as SDK's internal logic).
+ * Lazy-evaluated to avoid top-level Node.js API calls.
+ */
+async function getConfigPaths(): Promise<string[]> {
+  const path = await import('path');
+  const os = await import('os');
+  return [
+    path.join(process.cwd(), '.z-ai-config'),
+    path.join(os.homedir(), '.z-ai-config'),
+    '/etc/.z-ai-config',
+  ];
+}
 
 /**
  * Check if any local config file exists.
  */
-function localConfigExists(): boolean {
-  return CONFIG_PATHS.some((p) => existsSync(p));
+async function localConfigExists(): Promise<boolean> {
+  const fs = await import('fs');
+  const paths = await getConfigPaths();
+  return paths.some((p) => fs.existsSync(p));
 }
 
 /**
  * Initialize the ZAI SDK, supporting both local (.z-ai-config) and
  * Vercel (environment variables) deployments.
- *
- * On Vercel, we write a temp config to /tmp and temporarily chdir
- * so the SDK finds it via its loadConfig() logic.
  */
 export async function getZAI(): Promise<ZAI> {
   if (zaiInstance) return zaiInstance;
 
+  const ZAIClass = await loadZAI();
+
   // Local dev: config file exists somewhere, use default SDK initialization
-  if (localConfigExists()) {
-    zaiInstance = await ZAI.create();
+  if (await localConfigExists()) {
+    zaiInstance = await ZAIClass.create();
     return zaiInstance;
   }
 
@@ -50,6 +60,10 @@ export async function getZAI(): Promise<ZAI> {
   }
 
   // Create a temporary config file in /tmp (writable on Vercel)
+  const path = await import('path');
+  const os = await import('os');
+  const fs = await import('fs');
+
   const config = JSON.stringify({
     baseUrl,
     apiKey,
@@ -58,9 +72,9 @@ export async function getZAI(): Promise<ZAI> {
     token: process.env.ZAI_TOKEN || '',
   });
 
-  const tmpConfigPath = join(tmpdir(), '.z-ai-config');
+  const tmpConfigPath = path.join(os.tmpdir(), '.z-ai-config');
   try {
-    writeFileSync(tmpConfigPath, config, 'utf-8');
+    fs.writeFileSync(tmpConfigPath, config, 'utf-8');
   } catch (err) {
     throw new Error(`Failed to write temp ZAI config: ${err instanceof Error ? err.message : String(err)}`);
   }
@@ -68,8 +82,8 @@ export async function getZAI(): Promise<ZAI> {
   // Temporarily change cwd so the SDK finds the config at process.cwd()/.z-ai-config
   const originalCwd = process.cwd();
   try {
-    process.chdir(tmpdir());
-    zaiInstance = await ZAI.create();
+    process.chdir(os.tmpdir());
+    zaiInstance = await ZAIClass.create();
   } catch (err) {
     // Reset singleton on failure so next attempt can retry
     zaiInstance = null;
@@ -84,7 +98,7 @@ export async function getZAI(): Promise<ZAI> {
 /**
  * Direct API call helper for Vercel environments.
  * Bypasses the ZAI SDK entirely and calls the VLM API using fetch.
- * Use this as a fallback when the SDK approach fails.
+ * This is the primary method used on Vercel.
  */
 export async function generateAltTextDirect(
   base64Image: string,

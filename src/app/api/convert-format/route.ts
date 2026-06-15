@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sharp from 'sharp';
 
-// ── Config ──────────────────────────────────────────────────────────────────
-export const maxDuration = 10; // Hobby tier max is 10s
+// Vercel Hobby tier default is 10s — no explicit maxDuration needed
 
 // ---------------------------------------------------------------------------
 // Types
