@@ -1,0 +1,1060 @@
+     1→'use client'
+     2→
+     3→import React, { useState, useCallback, useRef } from 'react'
+     4→import { motion, AnimatePresence } from 'framer-motion'
+     5→import {
+     6→  Upload,
+     7→  Image as ImageIcon,
+     8→  Copy,
+     9→  Check,
+    10→  Download,
+    11→  Loader2,
+    12→  FileImage,
+    13→  Sparkles,
+    14→  RefreshCw,
+    15→  X,
+    16→  AlertCircle,
+    17→  ArrowRight,
+    18→  Images,
+    19→  Type,
+    20→  Zap,
+    21→} from 'lucide-react'
+    22→import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+    23→import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+    24→import { Button } from '@/components/ui/button'
+    25→import { Badge } from '@/components/ui/badge'
+    26→import { Progress } from '@/components/ui/progress'
+    27→import {
+    28→  Select,
+    29→  SelectContent,
+    30→  SelectItem,
+    31→  SelectTrigger,
+    32→  SelectValue,
+    33→} from '@/components/ui/select'
+    34→import { ScrollArea } from '@/components/ui/scroll-area'
+    35→import { Separator } from '@/components/ui/separator'
+    36→import { toast } from '@/hooks/use-toast'
+    37→
+    38→// ─── Types ───────────────────────────────────────────────────────────────────
+    39→
+    40→interface UploadedFile {
+    41→  file: File
+    42→  preview: string
+    43→  id: string
+    44→}
+    45→
+    46→interface AltTextResult {
+    47→  filename: string
+    48→  altText: string
+    49→}
+    50→
+    51→interface ConvertResult {
+    52→  filename: string
+    53→  convertedFilename: string
+    54→  originalSize: number
+    55→  convertedSize: number
+    56→  data: string
+    57→  mimeType: string
+    58→}
+    59→
+    60→const ACCEPTED_TYPES = [
+    61→  'image/png',
+    62→  'image/jpeg',
+    63→  'image/webp',
+    64→  'image/gif',
+    65→  'image/bmp',
+    66→  'image/tiff',
+    67→  'image/avif',
+    68→]
+    69→
+    70→const MAX_FILES = 15
+    71→const MAX_FILE_SIZE = 4 * 1024 * 1024 // 4MB (Vercel body limit)
+    72→
+    73→const FORMAT_OPTIONS = [
+    74→  { value: 'webp', label: 'WebP', mime: 'image/webp' },
+    75→  { value: 'png', label: 'PNG', mime: 'image/png' },
+    76→  { value: 'jpeg', label: 'JPEG', mime: 'image/jpeg' },
+    77→  { value: 'avif', label: 'AVIF', mime: 'image/avif' },
+    78→  { value: 'tiff', label: 'TIFF', mime: 'image/tiff' },
+    79→  { value: 'gif', label: 'GIF', mime: 'image/gif' },
+    80→  { value: 'bmp', label: 'BMP', mime: 'image/bmp' },
+    81→]
+    82→
+    83→// ─── Helpers ─────────────────────────────────────────────────────────────────
+    84→
+    85→function formatFileSize(bytes: number): string {
+    86→  if (bytes === 0) return '0 B'
+    87→  const k = 1024
+    88→  const sizes = ['B', 'KB', 'MB', 'GB']
+    89→  const i = Math.floor(Math.log(bytes) / Math.log(k))
+    90→  return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i]
+    91→}
+    92→
+    93→function getFileExtension(filename: string): string {
+    94→  return filename.split('.').pop()?.toUpperCase() || 'IMG'
+    95→}
+    96→
+    97→function fileToBase64(file: File): Promise<string> {
+    98→  return new Promise((resolve, reject) => {
+    99→    const reader = new FileReader()
+   100→    reader.readAsDataURL(file)
+   101→    reader.onload = () => resolve(reader.result as string)
+   102→    reader.onerror = (error) => reject(error)
+   103→  })
+   104→}
+   105→
+   106→// ─── Drop Zone Component ─────────────────────────────────────────────────────
+   107→
+   108→function DropZone({
+   109→  files,
+   110→  onFilesSelected,
+   111→  onClear,
+   112→  disabled,
+   113→}: {
+   114→  files: UploadedFile[]
+   115→  onFilesSelected: (files: FileList) => void
+   116→  onClear: () => void
+   117→  disabled: boolean
+   118→}) {
+   119→  const [isDragOver, setIsDragOver] = useState(false)
+   120→  const inputRef = useRef<HTMLInputElement>(null)
+   121→
+   122→  const handleDragOver = useCallback(
+   123→    (e: React.DragEvent) => {
+   124→      e.preventDefault()
+   125→      e.stopPropagation()
+   126→      if (!disabled) setIsDragOver(true)
+   127→    },
+   128→    [disabled]
+   129→  )
+   130→
+   131→  const handleDragLeave = useCallback((e: React.DragEvent) => {
+   132→    e.preventDefault()
+   133→    e.stopPropagation()
+   134→    setIsDragOver(false)
+   135→  }, [])
+   136→
+   137→  const handleDrop = useCallback(
+   138→    (e: React.DragEvent) => {
+   139→      e.preventDefault()
+   140→      e.stopPropagation()
+   141→      setIsDragOver(false)
+   142→      if (disabled) return
+   143→      if (e.dataTransfer.files?.length) {
+   144→        onFilesSelected(e.dataTransfer.files)
+   145→      }
+   146→    },
+   147→    [disabled, onFilesSelected]
+   148→  )
+   149→
+   150→  const handleClick = useCallback(() => {
+   151→    if (!disabled) inputRef.current?.click()
+   152→  }, [disabled])
+   153→
+   154→  const handleChange = useCallback(
+   155→    (e: React.ChangeEvent<HTMLInputElement>) => {
+   156→      if (e.target.files?.length) {
+   157→        onFilesSelected(e.target.files)
+   158→      }
+   159→      // Reset input so re-selecting the same file works
+   160→      e.target.value = ''
+   161→    },
+   162→    [onFilesSelected]
+   163→  )
+   164→
+   165→  return (
+   166→    <div className="space-y-3">
+   167→      <div
+   168→        onClick={handleClick}
+   169→        onDragOver={handleDragOver}
+   170→        onDragLeave={handleDragLeave}
+   171→        onDrop={handleDrop}
+   172→        className={`
+   173→          relative cursor-pointer rounded-xl border-2 border-dashed transition-all duration-300
+   174→          ${disabled ? 'opacity-50 cursor-not-allowed' : ''}
+   175→          ${
+   176→            isDragOver
+   177→              ? 'border-emerald-500 bg-emerald-50/80 dark:bg-emerald-950/30 scale-[1.01]'
+   178→              : 'border-muted-foreground/25 hover:border-emerald-400 hover:bg-emerald-50/40 dark:hover:bg-emerald-950/20'
+   179→          }
+   180→          p-8 md:p-12 text-center
+   181→        `}
+   182→      >
+   183→        <input
+   184→          ref={inputRef}
+   185→          type="file"
+   186→          accept={ACCEPTED_TYPES.join(',')}
+   187→          multiple
+   188→          onChange={handleChange}
+   189→          className="hidden"
+   190→          disabled={disabled}
+   191→        />
+   192→
+   193→        <motion.div
+   194→          animate={isDragOver ? { scale: 1.1, y: -4 } : { scale: 1, y: 0 }}
+   195→          transition={{ type: 'spring', stiffness: 300, damping: 20 }}
+   196→          className="flex flex-col items-center gap-3"
+   197→        >
+   198→          <div
+   199→            className={`rounded-full p-4 transition-colors duration-300 ${
+   200→              isDragOver
+   201→                ? 'bg-emerald-100 text-emerald-600 dark:bg-emerald-900/50 dark:text-emerald-400'
+   202→                : 'bg-muted text-muted-foreground'
+   203→            }`}
+   204→          >
+   205→            <Upload className="size-8" />
+   206→          </div>
+   207→          <div>
+   208→            <p className="text-base font-semibold text-foreground">
+   209→              {isDragOver ? 'Drop images here' : 'Drag & drop images here'}
+   210→            </p>
+   211→            <p className="mt-1 text-sm text-muted-foreground">
+   212→              or <span className="text-emerald-600 font-medium underline underline-offset-2">browse files</span>
+   213→            </p>
+   214→          </div>
+   215→          <p className="text-xs text-muted-foreground/70">
+   216→            PNG, JPEG, WebP, GIF, BMP, TIFF, AVIF · Up to {MAX_FILES} files · 4MB each
+   217→          </p>
+   218→        </motion.div>
+   219→      </div>
+   220→
+   221→      {/* Selected files preview */}
+   222→      <AnimatePresence>
+   223→        {files.length > 0 && (
+   224→          <motion.div
+   225→            initial={{ opacity: 0, height: 0 }}
+   226→            animate={{ opacity: 1, height: 'auto' }}
+   227→            exit={{ opacity: 0, height: 0 }}
+   228→            transition={{ duration: 0.2 }}
+   229→          >
+   230→            <div className="flex items-center justify-between">
+   231→              <div className="flex items-center gap-2">
+   232→                <Badge variant="secondary" className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-0">
+   233→                  {files.length} / {MAX_FILES}
+   234→                </Badge>
+   235→                <span className="text-sm text-muted-foreground">files selected</span>
+   236→              </div>
+   237→              <Button
+   238→                variant="ghost"
+   239→                size="sm"
+   240→                onClick={(e) => {
+   241→                  e.stopPropagation()
+   242→                  onClear()
+   243→                }}
+   244→                disabled={disabled}
+   245→                className="text-muted-foreground hover:text-destructive"
+   246→              >
+   247→                <X className="size-4 mr-1" />
+   248→                Clear all
+   249→              </Button>
+   250→            </div>
+   251→            <ScrollArea className="w-full">
+   252→              <div className="flex gap-2 mt-3 pb-1">
+   253→                {files.map((f) => (
+   254→                  <motion.div
+   255→                    key={f.id}
+   256→                    initial={{ opacity: 0, scale: 0.8 }}
+   257→                    animate={{ opacity: 1, scale: 1 }}
+   258→                    exit={{ opacity: 0, scale: 0.8 }}
+   259→                    className="relative shrink-0 group"
+   260→                  >
+   261→                    <div className="size-16 rounded-lg overflow-hidden border bg-muted">
+   262→                      <img
+   263→                        src={f.preview}
+   264→                        alt={f.file.name}
+   265→                        className="size-full object-cover"
+   266→                      />
+   267→                    </div>
+   268→                    <Badge
+   269→                      variant="secondary"
+   270→                      className="absolute -top-1.5 -right-1.5 text-[10px] px-1 py-0 h-4 bg-emerald-600 text-white border-0"
+   271→                    >
+   272→                      {getFileExtension(f.file.name)}
+   273→                    </Badge>
+   274→                  </motion.div>
+   275→                ))}
+   276→              </div>
+   277→            </ScrollArea>
+   278→          </motion.div>
+   279→        )}
+   280→      </AnimatePresence>
+   281→    </div>
+   282→  )
+   283→}
+   284→
+   285→// ─── Alt Text Result Card ────────────────────────────────────────────────────
+   286→
+   287→function AltTextCard({ result, index }: { result: AltTextResult; index: number }) {
+   288→  const [copied, setCopied] = useState(false)
+   289→  const hasError = !!result.error
+   290→  const hasAltText = !!result.altText
+   291→
+   292→  const handleCopy = useCallback(async () => {
+   293→    if (!hasAltText) return
+   294→    try {
+   295→      await navigator.clipboard.writeText(result.altText)
+   296→      setCopied(true)
+   297→      setTimeout(() => setCopied(false), 2000)
+   298→      toast({ title: 'Copied!', description: 'Alt text copied to clipboard' })
+   299→    } catch {
+   300→      toast({ title: 'Error', description: 'Failed to copy to clipboard', variant: 'destructive' })
+   301→    }
+   302→  }, [result.altText, hasAltText])
+   303→
+   304→  return (
+   305→    <motion.div
+   306→      initial={{ opacity: 0, y: 20 }}
+   307→      animate={{ opacity: 1, y: 0 }}
+   308→      transition={{ delay: index * 0.05, duration: 0.3 }}
+   309→    >
+   310→      <Card className={`overflow-hidden hover:shadow-md transition-shadow duration-200 group ${hasError ? 'border-destructive/30' : ''}`}>
+   311→        <CardContent className="p-4">
+   312→          <div className="flex items-start gap-3">
+   313→            <div className={`shrink-0 size-10 rounded-lg flex items-center justify-center ${hasError ? 'bg-destructive/10' : 'bg-emerald-50 dark:bg-emerald-950/40'}`}>
+   314→              {hasError ? (
+   315→                <AlertCircle className="size-5 text-destructive" />
+   316→              ) : (
+   317→                <Type className="size-5 text-emerald-600 dark:text-emerald-400" />
+   318→              )}
+   319→            </div>
+   320→            <div className="flex-1 min-w-0 space-y-1.5">
+   321→              <div className="flex items-center gap-2">
+   322→                <p className="text-sm font-medium truncate text-foreground">{result.filename}</p>
+   323→                <Badge variant="outline" className="text-[10px] shrink-0">
+   324→                  {getFileExtension(result.filename)}
+   325→                </Badge>
+   326→                {hasError && (
+   327→                  <Badge variant="destructive" className="text-[10px] shrink-0">Failed</Badge>
+   328→                )}
+   329→              </div>
+   330→              {hasError ? (
+   331→                <p className="text-sm text-destructive leading-relaxed">{result.error}</p>
+   332→              ) : (
+   333→                <p className="text-sm text-muted-foreground leading-relaxed">{result.altText}</p>
+   334→              )}
+   335→            </div>
+   336→            {hasAltText && (
+   337→              <Button
+   338→                variant="ghost"
+   339→                size="icon"
+   340→                onClick={handleCopy}
+   341→                className="shrink-0 size-8 opacity-0 group-hover:opacity-100 transition-opacity"
+   342→              >
+   343→                {copied ? (
+   344→                  <Check className="size-4 text-emerald-600" />
+   345→                ) : (
+   346→                  <Copy className="size-4" />
+   347→                )}
+   348→              </Button>
+   349→            )}
+   350→          </div>
+   351→        </CardContent>
+   352→      </Card>
+   353→    </motion.div>
+   354→  )
+   355→}
+   356→
+   357→// ─── Convert Result Card ─────────────────────────────────────────────────────
+   358→
+   359→function ConvertResultCard({ result, index }: { result: ConvertResult; index: number }) {
+   360→  const sizeDiff = result.originalSize - result.convertedSize
+   361→  const sizeChangePercent = ((sizeDiff / result.originalSize) * 100).toFixed(1)
+   362→  const isSmaller = sizeDiff > 0
+   363→
+   364→  const handleDownload = useCallback(() => {
+   365→    const byteString = atob(result.data)
+   366→    const ab = new ArrayBuffer(byteString.length)
+   367→    const ia = new Uint8Array(ab)
+   368→    for (let i = 0; i < byteString.length; i++) {
+   369→      ia[i] = byteString.charCodeAt(i)
+   370→    }
+   371→    const blob = new Blob([ab], { type: result.mimeType })
+   372→    const url = URL.createObjectURL(blob)
+   373→    const a = document.createElement('a')
+   374→    a.href = url
+   375→    a.download = result.convertedFilename
+   376→    document.body.appendChild(a)
+   377→    a.click()
+   378→    document.body.removeChild(a)
+   379→    URL.revokeObjectURL(url)
+   380→    toast({ title: 'Downloaded!', description: result.convertedFilename })
+   381→  }, [result])
+   382→
+   383→  return (
+   384→    <motion.div
+   385→      initial={{ opacity: 0, y: 20 }}
+   386→      animate={{ opacity: 1, y: 0 }}
+   387→      transition={{ delay: index * 0.05, duration: 0.3 }}
+   388→    >
+   389→      <Card className="overflow-hidden hover:shadow-md transition-shadow duration-200">
+   390→        <CardContent className="p-4">
+   391→          <div className="flex items-center gap-3">
+   392→            <div className="shrink-0 size-12 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center overflow-hidden">
+   393→              <img
+   394→                src={`data:${result.mimeType};base64,${result.data}`}
+   395→                alt={result.convertedFilename}
+   396→                className="size-full object-cover"
+   397→              />
+   398→            </div>
+   399→            <div className="flex-1 min-w-0 space-y-1">
+   400→              <p className="text-sm font-medium truncate">{result.convertedFilename}</p>
+   401→              <div className="flex items-center gap-2 flex-wrap">
+   402→                <span className="text-xs text-muted-foreground">
+   403→                  {formatFileSize(result.originalSize)}
+   404→                </span>
+   405→                <ArrowRight className="size-3 text-muted-foreground" />
+   406→                <span className="text-xs font-medium text-foreground">
+   407→                  {formatFileSize(result.convertedSize)}
+   408→                </span>
+   409→                <Badge
+   410→                  variant="secondary"
+   411→                  className={`text-[10px] border-0 ${
+   412→                    isSmaller
+   413→                      ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400'
+   414→                      : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'
+   415→                  }`}
+   416→                >
+   417→                  {isSmaller ? '↓' : '↑'} {Math.abs(parseFloat(sizeChangePercent))}%
+   418→                </Badge>
+   419→              </div>
+   420→            </div>
+   421→            <Button
+   422→              variant="outline"
+   423→              size="sm"
+   424→              onClick={handleDownload}
+   425→              className="shrink-0 gap-1.5 border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
+   426→            >
+   427→              <Download className="size-3.5" />
+   428→              <span className="hidden sm:inline">Download</span>
+   429→            </Button>
+   430→          </div>
+   431→        </CardContent>
+   432→      </Card>
+   433→    </motion.div>
+   434→  )
+   435→}
+   436→
+   437→// ─── Main Page ───────────────────────────────────────────────────────────────
+   438→
+   439→export default function Home() {
+   440→  // Alt Text state
+   441→  const [altFiles, setAltFiles] = useState<UploadedFile[]>([])
+   442→  const [altResults, setAltResults] = useState<AltTextResult[]>([])
+   443→  const [altLoading, setAltLoading] = useState(false)
+   444→  const [altProgress, setAltProgress] = useState(0)
+   445→
+   446→  // Convert state
+   447→  const [convertFiles, setConvertFiles] = useState<UploadedFile[]>([])
+   448→  const [convertFormat, setConvertFormat] = useState('webp')
+   449→  const [convertResults, setConvertResults] = useState<ConvertResult[]>([])
+   450→  const [convertLoading, setConvertLoading] = useState(false)
+   451→  const [convertProgress, setConvertProgress] = useState(0)
+   452→
+   453→  // ── File selection handler ──────────────────────────────────────────────────
+   454→
+   455→  const processFiles = useCallback(
+   456→    (fileList: FileList, currentFiles: UploadedFile[]): UploadedFile[] => {
+   457→      const newFiles: UploadedFile[] = []
+   458→      const fileArray = Array.from(fileList)
+   459→
+   460→      for (const file of fileArray) {
+   461→        // Stop if we'd exceed the max
+   462→        if (currentFiles.length + newFiles.length >= MAX_FILES) {
+   463→          toast({
+   464→            title: 'Maximum files reached',
+   465→            description: `You can upload up to ${MAX_FILES} files at once`,
+   466→            variant: 'destructive',
+   467→          })
+   468→          break
+   469→        }
+   470→
+   471→        if (!ACCEPTED_TYPES.includes(file.type)) {
+   472→          toast({
+   473→            title: 'Invalid file type',
+   474→            description: `${file.name} is not a supported image format`,
+   475→            variant: 'destructive',
+   476→          })
+   477→          continue
+   478→        }
+   479→
+   480→        if (file.size > MAX_FILE_SIZE) {
+   481→          toast({
+   482→            title: 'File too large',
+   483→            description: `${file.name} exceeds the 4MB limit`,
+   484→            variant: 'destructive',
+   485→          })
+   486→          continue
+   487→        }
+   488→
+   489→        newFiles.push({
+   490→          file,
+   491→          preview: URL.createObjectURL(file),
+   492→          id: crypto.randomUUID(),
+   493→        })
+   494→      }
+   495→
+   496→      return [...currentFiles, ...newFiles]
+   497→    },
+   498→    []
+   499→  )
+   500→
+   501→  const handleAltFilesSelected = useCallback(
+   502→    (fileList: FileList) => {
+   503→      setAltFiles((prev) => processFiles(fileList, prev))
+   504→      setAltResults([])
+   505→    },
+   506→    [processFiles]
+   507→  )
+   508→
+   509→  const handleConvertFilesSelected = useCallback(
+   510→    (fileList: FileList) => {
+   511→      setConvertFiles((prev) => processFiles(fileList, prev))
+   512→      setConvertResults([])
+   513→    },
+   514→    [processFiles]
+   515→  )
+   516→
+   517→  // ── Alt text generation (one image at a time to avoid 502 timeout) ──────────
+   518→
+   519→  const handleGenerateAltText = useCallback(async () => {
+   520→    if (altFiles.length === 0) {
+   521→      toast({ title: 'No images', description: 'Please upload at least one image', variant: 'destructive' })
+   522→      return
+   523→    }
+   524→
+   525→    setAltLoading(true)
+   526→    setAltProgress(0)
+   527→    setAltResults([])
+   528→
+   529→    const totalFiles = altFiles.length
+   530→    const allResults: AltTextResult[] = []
+   531→
+   532→    for (let i = 0; i < altFiles.length; i++) {
+   533→      const uf = altFiles[i]
+   534→      setAltProgress(Math.round(((i) / totalFiles) * 100))
+   535→
+   536→      try {
+   537→        const formData = new FormData()
+   538→        formData.append('images', uf.file)
+   539→
+   540→        const response = await fetch('/api/generate-alt-text', {
+   541→          method: 'POST',
+   542→          body: formData,
+   543→        })
+   544→
+   545→        if (!response.ok) {
+   546→          throw new Error(`Server error: ${response.status}`)
+   547→        }
+   548→
+   549→        const data = await response.json()
+   550→        const results = data.results || []
+   551→        allResults.push(...results)
+   552→        setAltResults([...allResults])
+   553→      } catch (err) {
+   554→        const message = err instanceof Error ? err.message : 'Failed to generate alt text'
+   555→        allResults.push({ filename: uf.file.name, altText: '', error: message })
+   556→        setAltResults([...allResults])
+   557→      }
+   558→
+   559→      // Small delay between requests to avoid rate limiting
+   560→      if (i < altFiles.length - 1) {
+   561→        await new Promise((r) => setTimeout(r, 300))
+   562→      }
+   563→    }
+   564→
+   565→    setAltProgress(100)
+   566→
+   567→    const successCount = allResults.filter((r) => r.altText && !r.error).length
+   568→    const failCount = allResults.filter((r) => r.error).length
+   569→
+   570→    if (failCount === 0) {
+   571→      toast({
+   572→        title: 'Success!',
+   573→        description: `Generated alt text for all ${successCount} images`,
+   574→      })
+   575→    } else if (successCount > 0) {
+   576→      toast({
+   577→        title: 'Partial Success',
+   578→        description: `${successCount} succeeded, ${failCount} failed. Check results for details.`,
+   579→        variant: 'destructive',
+   580→      })
+   581→    } else {
+   582→      toast({ title: 'Error', description: 'All images failed. Please try again.', variant: 'destructive' })
+   583→    }
+   584→
+   585→    setAltLoading(false)
+   586→  }, [altFiles])
+   587→
+   588→  const handleCopyAll = useCallback(async () => {
+   589→    if (altResults.length === 0) return
+   590→    const successResults = altResults.filter((r) => r.altText && !r.error)
+   591→    if (successResults.length === 0) {
+   592→      toast({ title: 'Nothing to copy', description: 'No successful alt texts to copy', variant: 'destructive' })
+   593→      return
+   594→    }
+   595→    const allText = successResults.map((r) => `${r.filename}:\n${r.altText}`).join('\n\n')
+   596→    try {
+   597→      await navigator.clipboard.writeText(allText)
+   598→      toast({ title: 'All copied!', description: `${successResults.length} alt texts copied to clipboard` })
+   599→    } catch {
+   600→      toast({ title: 'Error', description: 'Failed to copy to clipboard', variant: 'destructive' })
+   601→    }
+   602→  }, [altResults])
+   603→
+   604→  // ── Format conversion (one image at a time to avoid 502 timeout) ─────────────
+   605→
+   606→  const handleConvertFormat = useCallback(async () => {
+   607→    if (convertFiles.length === 0) {
+   608→      toast({ title: 'No images', description: 'Please upload at least one image', variant: 'destructive' })
+   609→      return
+   610→    }
+   611→
+   612→    setConvertLoading(true)
+   613→    setConvertProgress(0)
+   614→    setConvertResults([])
+   615→
+   616→    const totalFiles = convertFiles.length
+   617→    const allResults: ConvertResult[] = []
+   618→
+   619→    for (let i = 0; i < convertFiles.length; i++) {
+   620→      const uf = convertFiles[i]
+   621→      setConvertProgress(Math.round(((i) / totalFiles) * 100))
+   622→
+   623→      try {
+   624→        const formData = new FormData()
+   625→        formData.append('images', uf.file)
+   626→        formData.append('format', convertFormat)
+   627→
+   628→        const response = await fetch('/api/convert-format', {
+   629→          method: 'POST',
+   630→          body: formData,
+   631→        })
+   632→
+   633→        if (!response.ok) {
+   634→          throw new Error(`Server error: ${response.status}`)
+   635→        }
+   636→
+   637→        const data = await response.json()
+   638→        const results = data.results || []
+   639→        allResults.push(...results)
+   640→        setConvertResults([...allResults])
+   641→      } catch (err) {
+   642→        const message = err instanceof Error ? err.message : 'Failed to convert image'
+   643→        toast({ title: `Error: ${uf.file.name}`, description: message, variant: 'destructive' })
+   644→      }
+   645→    }
+   646→
+   647→    setConvertProgress(100)
+   648→
+   649→    if (allResults.length > 0) {
+   650→      toast({
+   651→        title: 'Success!',
+   652→        description: `Converted ${allResults.length} images to ${convertFormat.toUpperCase()}`,
+   653→      })
+   654→    }
+   655→
+   656→    setConvertLoading(false)
+   657→  }, [convertFiles, convertFormat])
+   658→
+   659→  // ── Total size stats for converter ──────────────────────────────────────────
+   660→
+   661→  const totalOriginal = convertResults.reduce((s, r) => s + r.originalSize, 0)
+   662→  const totalConverted = convertResults.reduce((s, r) => s + r.convertedSize, 0)
+   663→  const totalSavings = totalOriginal > 0 ? ((totalOriginal - totalConverted) / totalOriginal * 100).toFixed(1) : '0'
+   664→
+   665→  // ── Render ──────────────────────────────────────────────────────────────────
+   666→
+   667→  return (
+   668→    <div className="min-h-screen flex flex-col bg-background">
+   669→      {/* ── Header ─────────────────────────────────────────────────────────── */}
+   670→      <header className="sticky top-0 z-40 w-full border-b bg-background/80 backdrop-blur-lg supports-[backdrop-filter]:bg-background/60">
+   671→        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8">
+   672→          <div className="flex items-center justify-between h-16">
+   673→            <div className="flex items-center gap-3">
+   674→              <div className="flex size-9 items-center justify-center rounded-lg bg-emerald-600 text-white shadow-sm">
+   675→                <Sparkles className="size-5" />
+   676→              </div>
+   677→              <div>
+   678→                <h1 className="text-lg font-bold tracking-tight text-foreground">
+   679→                  AltForge
+   680→                </h1>
+   681→                <p className="hidden sm:block text-xs text-muted-foreground -mt-0.5">
+   682→                  AI Alt Text & Image Format Converter
+   683→                </p>
+   684→              </div>
+   685→            </div>
+   686→            <div className="flex items-center gap-2">
+   687→              <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800">
+   688→                <Zap className="size-3 mr-1" />
+   689→                AI-Powered
+   690→              </Badge>
+   691→            </div>
+   692→          </div>
+   693→        </div>
+   694→      </header>
+   695→
+   696→      {/* ── Main Content ───────────────────────────────────────────────────── */}
+   697→      <main className="flex-1 w-full">
+   698→        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-6 md:py-10">
+   699→          {/* Hero section */}
+   700→          <div className="text-center mb-8 md:mb-10">
+   701→            <motion.h2
+   702→              initial={{ opacity: 0, y: 10 }}
+   703→              animate={{ opacity: 1, y: 0 }}
+   704→              transition={{ duration: 0.5 }}
+   705→              className="text-2xl sm:text-3xl md:text-4xl font-bold tracking-tight text-foreground"
+   706→            >
+   707→              Transform your images with{' '}
+   708→              <span className="text-emerald-600 dark:text-emerald-400">AI power</span>
+   709→            </motion.h2>
+   710→            <motion.p
+   711→              initial={{ opacity: 0, y: 10 }}
+   712→              animate={{ opacity: 1, y: 0 }}
+   713→              transition={{ duration: 0.5, delay: 0.1 }}
+   714→              className="mt-2 text-sm sm:text-base text-muted-foreground max-w-2xl mx-auto"
+   715→            >
+   716→              Generate descriptive alt text for accessibility and SEO, or convert your images
+   717→              between formats with instant size optimization.
+   718→            </motion.p>
+   719→          </div>
+   720→
+   721→          {/* Tabs */}
+   722→          <motion.div
+   723→            initial={{ opacity: 0, y: 20 }}
+   724→            animate={{ opacity: 1, y: 0 }}
+   725→            transition={{ duration: 0.5, delay: 0.2 }}
+   726→          >
+   727→            <Tabs defaultValue="alt-text" className="w-full">
+   728→              <div className="flex justify-center mb-6">
+   729→                <TabsList className="bg-muted/60 p-1 rounded-xl">
+   730→                  <TabsTrigger
+   731→                    value="alt-text"
+   732→                    className="rounded-lg gap-2 data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm px-4 sm:px-6"
+   733→                  >
+   734→                    <Type className="size-4" />
+   735→                    <span className="hidden sm:inline">Alt Text</span> Generator
+   736→                  </TabsTrigger>
+   737→                  <TabsTrigger
+   738→                    value="converter"
+   739→                    className="rounded-lg gap-2 data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-sm px-4 sm:px-6"
+   740→                  >
+   741→                    <FileImage className="size-4" />
+   742→                    <span className="hidden sm:inline">Format</span> Converter
+   743→                  </TabsTrigger>
+   744→                </TabsList>
+   745→              </div>
+   746→
+   747→              {/* ── Alt Text Tab ─────────────────────────────────────────────── */}
+   748→              <TabsContent value="alt-text">
+   749→                <Card className="border-0 shadow-lg shadow-emerald-500/5">
+   750→                  <CardHeader className="pb-4">
+   751→                    <div className="flex items-center justify-between flex-wrap gap-3">
+   752→                      <div>
+   753→                        <CardTitle className="flex items-center gap-2 text-lg">
+   754→                          <Images className="size-5 text-emerald-600 dark:text-emerald-400" />
+   755→                          AI Alt Text Generator
+   756→                        </CardTitle>
+   757→                        <CardDescription className="mt-1">
+   758→                          Upload images and get AI-generated descriptive alt text for accessibility &amp; SEO
+   759→                        </CardDescription>
+   760→                      </div>
+   761→                      {altResults.length > 0 && (
+   762→                        <Button
+   763→                          variant="outline"
+   764→                          size="sm"
+   765→                          onClick={handleCopyAll}
+   766→                          className="gap-1.5 border-emerald-200 text-emerald-700 hover:bg-emerald-50 dark:border-emerald-800 dark:text-emerald-400 dark:hover:bg-emerald-950/40"
+   767→                        >
+   768→                          <Copy className="size-3.5" />
+   769→                          Copy All
+   770→                        </Button>
+   771→                      )}
+   772→                    </div>
+   773→                  </CardHeader>
+   774→                  <CardContent className="space-y-6">
+   775→                    {/* Drop zone */}
+   776→                    <DropZone
+   777→                      files={altFiles}
+   778→                      onFilesSelected={handleAltFilesSelected}
+   779→                      onClear={() => {
+   780→                        setAltFiles([])
+   781→                        setAltResults([])
+   782→                      }}
+   783→                      disabled={altLoading}
+   784→                    />
+   785→
+   786→                    {/* Generate button */}
+   787→                    {altFiles.length > 0 && altResults.length === 0 && (
+   788→                      <motion.div
+   789→                        initial={{ opacity: 0 }}
+   790→                        animate={{ opacity: 1 }}
+   791→                        className="flex justify-center"
+   792→                      >
+   793→                        <Button
+   794→                          size="lg"
+   795→                          onClick={handleGenerateAltText}
+   796→                          disabled={altLoading}
+   797→                          className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/25 min-w-[200px]"
+   798→                        >
+   799→                          {altLoading ? (
+   800→                            <>
+   801→                              <Loader2 className="size-4 animate-spin" />
+   802→                              Generating...
+   803→                            </>
+   804→                          ) : (
+   805→                            <>
+   806→                              <Sparkles className="size-4" />
+   807→                              Generate Alt Text
+   808→                            </>
+   809→                          )}
+   810→                        </Button>
+   811→                      </motion.div>
+   812→                    )}
+   813→
+   814→                    {/* Progress */}
+   815→                    {altLoading && (
+   816→                      <motion.div
+   817→                        initial={{ opacity: 0 }}
+   818→                        animate={{ opacity: 1 }}
+   819→                        className="space-y-2"
+   820→                      >
+   821→                        <div className="flex items-center justify-between text-sm text-muted-foreground">
+   822→                          <span>Analyzing images with AI...</span>
+   823→                          <span>{Math.round(altProgress)}%</span>
+   824→                        </div>
+   825→                        <Progress value={altProgress} className="h-2 [&>div]:bg-emerald-600" />
+   826→                      </motion.div>
+   827→                    )}
+   828→
+   829→                    {/* Results */}
+   830→                    {altResults.length > 0 && (
+   831→                      <div className="space-y-3">
+   832→                        <Separator />
+   833→                        <div className="flex items-center gap-2">
+   834→                          <h3 className="text-sm font-semibold text-foreground">Results</h3>
+   835→                          <Badge variant="secondary" className="text-xs bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border-0">
+   836→                            {altResults.length} images
+   837→                          </Badge>
+   838→                        </div>
+   839→                        <div className="grid gap-3 max-h-[500px] overflow-y-auto pr-1 custom-scrollbar">
+   840→                          {altResults.map((result, i) => (
+   841→                            <AltTextCard key={result.filename} result={result} index={i} />
+   842→                          ))}
+   843→                        </div>
+   844→                        <div className="flex justify-center pt-2">
+   845→                          <Button
+   846→                            variant="outline"
+   847→                            onClick={() => {
+   848→                              setAltFiles([])
+   849→                              setAltResults([])
+   850→                            }}
+   851→                            className="gap-2"
+   852→                          >
+   853→                            <RefreshCw className="size-4" />
+   854→                            Start Over
+   855→                          </Button>
+   856→                        </div>
+   857→                      </div>
+   858→                    )}
+   859→                  </CardContent>
+   860→                </Card>
+   861→              </TabsContent>
+   862→
+   863→              {/* ── Format Converter Tab ─────────────────────────────────────── */}
+   864→              <TabsContent value="converter">
+   865→                <Card className="border-0 shadow-lg shadow-emerald-500/5">
+   866→                  <CardHeader className="pb-4">
+   867→                    <CardTitle className="flex items-center gap-2 text-lg">
+   868→                      <FileImage className="size-5 text-emerald-600 dark:text-emerald-400" />
+   869→                      Image Format Converter
+   870→                    </CardTitle>
+   871→                    <CardDescription>
+   872→                      Convert images between formats and compare file sizes instantly
+   873→                    </CardDescription>
+   874→                  </CardHeader>
+   875→                  <CardContent className="space-y-6">
+   876→                    {/* Drop zone */}
+   877→                    <DropZone
+   878→                      files={convertFiles}
+   879→                      onFilesSelected={handleConvertFilesSelected}
+   880→                      onClear={() => {
+   881→                        setConvertFiles([])
+   882→                        setConvertResults([])
+   883→                      }}
+   884→                      disabled={convertLoading}
+   885→                    />
+   886→
+   887→                    {/* Format selector + Convert button */}
+   888→                    {convertFiles.length > 0 && convertResults.length === 0 && (
+   889→                      <motion.div
+   890→                        initial={{ opacity: 0 }}
+   891→                        animate={{ opacity: 1 }}
+   892→                        className="flex flex-col sm:flex-row items-center justify-center gap-3"
+   893→                      >
+   894→                        <div className="flex items-center gap-2">
+   895→                          <span className="text-sm text-muted-foreground whitespace-nowrap">Convert to:</span>
+   896→                          <Select value={convertFormat} onValueChange={setConvertFormat}>
+   897→                            <SelectTrigger className="w-[140px]">
+   898→                              <SelectValue />
+   899→                            </SelectTrigger>
+   900→                            <SelectContent>
+   901→                              {FORMAT_OPTIONS.map((opt) => (
+   902→                                <SelectItem key={opt.value} value={opt.value}>
+   903→                                  {opt.label}
+   904→                                </SelectItem>
+   905→                              ))}
+   906→                            </SelectContent>
+   907→                          </Select>
+   908→                        </div>
+   909→                        <Button
+   910→                          size="lg"
+   911→                          onClick={handleConvertFormat}
+   912→                          disabled={convertLoading}
+   913→                          className="gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/25 min-w-[180px]"
+   914→                        >
+   915→                          {convertLoading ? (
+   916→                            <>
+   917→                              <Loader2 className="size-4 animate-spin" />
+   918→                              Converting...
+   919→                            </>
+   920→                          ) : (
+   921→                            <>
+   922→                              <FileImage className="size-4" />
+   923→                              Convert All
+   924→                            </>
+   925→                          )}
+   926→                        </Button>
+   927→                      </motion.div>
+   928→                    )}
+   929→
+   930→                    {/* Progress */}
+   931→                    {convertLoading && (
+   932→                      <motion.div
+   933→                        initial={{ opacity: 0 }}
+   934→                        animate={{ opacity: 1 }}
+   935→                        className="space-y-2"
+   936→                      >
+   937→                        <div className="flex items-center justify-between text-sm text-muted-foreground">
+   938→                          <span>Converting images to {convertFormat.toUpperCase()}...</span>
+   939→                          <span>{Math.round(convertProgress)}%</span>
+   940→                        </div>
+   941→                        <Progress value={convertProgress} className="h-2 [&>div]:bg-emerald-600" />
+   942→                      </motion.div>
+   943→                    )}
+   944→
+   945→                    {/* Results */}
+   946→                    {convertResults.length > 0 && (
+   947→                      <div className="space-y-4">
+   948→                        <Separator />
+   949→
+   950→                        {/* Summary stats */}
+   951→                        <div className="grid grid-cols-3 gap-3">
+   952→                          <div className="rounded-lg bg-muted/50 p-3 text-center">
+   953→                            <p className="text-xs text-muted-foreground">Original</p>
+   954→                            <p className="text-sm font-semibold text-foreground">{formatFileSize(totalOriginal)}</p>
+   955→                          </div>
+   956→                          <div className="rounded-lg bg-muted/50 p-3 text-center">
+   957→                            <p className="text-xs text-muted-foreground">Converted</p>
+   958→                            <p className="text-sm font-semibold text-foreground">{formatFileSize(totalConverted)}</p>
+   959→                          </div>
+   960→                          <div className="rounded-lg bg-emerald-50 dark:bg-emerald-950/30 p-3 text-center">
+   961→                            <p className="text-xs text-emerald-600 dark:text-emerald-400">Savings</p>
+   962→                            <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">
+   963→                              {parseFloat(totalSavings) > 0 ? '-' : '+'}{totalSavings}%
+   964→                            </p>
+   965→                          </div>
+   966→                        </div>
+   967→
+   968→                        <div className="flex items-center gap-2">
+   969→                          <h3 className="text-sm font-semibold text-foreground">Converted Files</h3>
+   970→                          <Badge variant="secondary" className="text-xs bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 border-0">
+   971→                            {convertResults.length} files
+   972→                          </Badge>
+   973→                        </div>
+   974→                        <div className="grid gap-3 max-h-[500px] overflow-y-auto pr-1 custom-scrollbar">
+   975→                          {convertResults.map((result, i) => (
+   976→                            <ConvertResultCard key={result.convertedFilename} result={result} index={i} />
+   977→                          ))}
+   978→                        </div>
+   979→                        <div className="flex justify-center pt-2">
+   980→                          <Button
+   981→                            variant="outline"
+   982→                            onClick={() => {
+   983→                              setConvertFiles([])
+   984→                              setConvertResults([])
+   985→                            }}
+   986→                            className="gap-2"
+   987→                          >
+   988→                            <RefreshCw className="size-4" />
+   989→                            Start Over
+   990→                          </Button>
+   991→                        </div>
+   992→                      </div>
+   993→                    )}
+   994→                  </CardContent>
+   995→                </Card>
+   996→              </TabsContent>
+   997→            </Tabs>
+   998→          </motion.div>
+   999→
+  1000→          {/* Info cards */}
+  1001→          <motion.div
+  1002→            initial={{ opacity: 0, y: 20 }}
+  1003→            animate={{ opacity: 1, y: 0 }}
+  1004→            transition={{ duration: 0.5, delay: 0.4 }}
+  1005→            className="mt-8 grid sm:grid-cols-2 gap-4"
+  1006→          >
+  1007→            <Card className="border-0 bg-emerald-50/50 dark:bg-emerald-950/20">
+  1008→              <CardContent className="p-4 flex items-start gap-3">
+  1009→                <div className="shrink-0 size-8 rounded-full bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center">
+  1010→                  <Type className="size-4 text-emerald-600 dark:text-emerald-400" />
+  1011→                </div>
+  1012→                <div>
+  1013→                  <p className="text-sm font-semibold text-foreground">Alt Text Generator</p>
+  1014→                  <p className="text-xs text-muted-foreground mt-0.5">
+  1015→                    AI-powered descriptions that improve accessibility and search engine optimization for your images.
+  1016→                  </p>
+  1017→                </div>
+  1018→              </CardContent>
+  1019→            </Card>
+  1020→            <Card className="border-0 bg-emerald-50/50 dark:bg-emerald-950/20">
+  1021→              <CardContent className="p-4 flex items-start gap-3">
+  1022→                <div className="shrink-0 size-8 rounded-full bg-emerald-100 dark:bg-emerald-900/50 flex items-center justify-center">
+  1023→                  <FileImage className="size-4 text-emerald-600 dark:text-emerald-400" />
+  1024→                </div>
+  1025→                <div>
+  1026→                  <p className="text-sm font-semibold text-foreground">Format Converter</p>
+  1027→                  <p className="text-xs text-muted-foreground mt-0.5">
+  1028→                    Convert between WebP, PNG, JPEG, AVIF and more. Optimize file sizes while maintaining quality.
+  1029→                  </p>
+  1030→                </div>
+  1031→              </CardContent>
+  1032→            </Card>
+  1033→          </motion.div>
+  1034→        </div>
+  1035→      </main>
+  1036→
+  1037→      {/* ── Footer ─────────────────────────────────────────────────────────── */}
+  1038→      <footer className="mt-auto border-t bg-muted/30">
+  1039→        <div className="mx-auto max-w-5xl px-4 sm:px-6 lg:px-8 py-6">
+  1040→          <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
+  1041→            <div className="flex items-center gap-2">
+  1042→              <Sparkles className="size-4 text-emerald-600 dark:text-emerald-400" />
+  1043→              <span className="text-sm font-medium text-foreground">AltForge</span>
+  1044→            </div>
+  1045→            <p className="text-xs text-muted-foreground text-center">
+  1046→              AI-powered image tools · Built with Next.js &amp; shadcn/ui
+  1047→            </p>
+  1048→            <div className="flex items-center gap-1.5">
+  1049→              <AlertCircle className="size-3 text-muted-foreground" />
+  1050→              <span className="text-xs text-muted-foreground">
+  1051→                All processing happens securely on the server
+  1052→              </span>
+  1053→            </div>
+  1054→          </div>
+  1055→        </div>
+  1056→      </footer>
+  1057→    </div>
+  1058→  )
+  1059→}
+  1060→
