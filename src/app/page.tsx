@@ -286,8 +286,11 @@ function DropZone({
 
 function AltTextCard({ result, index }: { result: AltTextResult; index: number }) {
   const [copied, setCopied] = useState(false)
+  const hasError = !!result.error
+  const hasAltText = !!result.altText
 
   const handleCopy = useCallback(async () => {
+    if (!hasAltText) return
     try {
       await navigator.clipboard.writeText(result.altText)
       setCopied(true)
@@ -296,7 +299,7 @@ function AltTextCard({ result, index }: { result: AltTextResult; index: number }
     } catch {
       toast({ title: 'Error', description: 'Failed to copy to clipboard', variant: 'destructive' })
     }
-  }, [result.altText])
+  }, [result.altText, hasAltText])
 
   return (
     <motion.div
@@ -304,11 +307,15 @@ function AltTextCard({ result, index }: { result: AltTextResult; index: number }
       animate={{ opacity: 1, y: 0 }}
       transition={{ delay: index * 0.05, duration: 0.3 }}
     >
-      <Card className="overflow-hidden hover:shadow-md transition-shadow duration-200 group">
+      <Card className={`overflow-hidden hover:shadow-md transition-shadow duration-200 group ${hasError ? 'border-destructive/30' : ''}`}>
         <CardContent className="p-4">
           <div className="flex items-start gap-3">
-            <div className="shrink-0 size-10 rounded-lg bg-emerald-50 dark:bg-emerald-950/40 flex items-center justify-center">
-              <Type className="size-5 text-emerald-600 dark:text-emerald-400" />
+            <div className={`shrink-0 size-10 rounded-lg flex items-center justify-center ${hasError ? 'bg-destructive/10' : 'bg-emerald-50 dark:bg-emerald-950/40'}`}>
+              {hasError ? (
+                <AlertCircle className="size-5 text-destructive" />
+              ) : (
+                <Type className="size-5 text-emerald-600 dark:text-emerald-400" />
+              )}
             </div>
             <div className="flex-1 min-w-0 space-y-1.5">
               <div className="flex items-center gap-2">
@@ -316,21 +323,30 @@ function AltTextCard({ result, index }: { result: AltTextResult; index: number }
                 <Badge variant="outline" className="text-[10px] shrink-0">
                   {getFileExtension(result.filename)}
                 </Badge>
+                {hasError && (
+                  <Badge variant="destructive" className="text-[10px] shrink-0">Failed</Badge>
+                )}
               </div>
-              <p className="text-sm text-muted-foreground leading-relaxed">{result.altText}</p>
-            </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={handleCopy}
-              className="shrink-0 size-8 opacity-0 group-hover:opacity-100 transition-opacity"
-            >
-              {copied ? (
-                <Check className="size-4 text-emerald-600" />
+              {hasError ? (
+                <p className="text-sm text-destructive leading-relaxed">{result.error}</p>
               ) : (
-                <Copy className="size-4" />
+                <p className="text-sm text-muted-foreground leading-relaxed">{result.altText}</p>
               )}
-            </Button>
+            </div>
+            {hasAltText && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleCopy}
+                className="shrink-0 size-8 opacity-0 group-hover:opacity-100 transition-opacity"
+              >
+                {copied ? (
+                  <Check className="size-4 text-emerald-600" />
+                ) : (
+                  <Copy className="size-4" />
+                )}
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
@@ -516,10 +532,11 @@ export default function Home() {
         formData.append('images', uf.file)
       }
 
-      // Simulate progress
+      // Progress based on file count
+      const totalFiles = altFiles.length
       const progressInterval = setInterval(() => {
-        setAltProgress((prev) => Math.min(prev + Math.random() * 15, 90))
-      }, 500)
+        setAltProgress((prev) => Math.min(prev + 1, 90))
+      }, 1000)
 
       const response = await fetch('/api/generate-alt-text', {
         method: 'POST',
@@ -533,12 +550,25 @@ export default function Home() {
       }
 
       const data = await response.json()
-      setAltResults(data.results || [])
+      const results = data.results || []
+      setAltResults(results)
       setAltProgress(100)
-      toast({
-        title: 'Success!',
-        description: `Generated alt text for ${data.results?.length || 0} images`,
-      })
+
+      const successCount = results.filter((r: AltTextResult) => r.altText && !r.error).length
+      const failCount = results.filter((r: AltTextResult) => r.error).length
+
+      if (failCount === 0) {
+        toast({
+          title: 'Success!',
+          description: `Generated alt text for all ${successCount} images`,
+        })
+      } else {
+        toast({
+          title: 'Partial Success',
+          description: `${successCount} succeeded, ${failCount} failed. Check results for details.`,
+          variant: 'destructive',
+        })
+      }
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Failed to generate alt text'
       toast({ title: 'Error', description: message, variant: 'destructive' })
@@ -549,10 +579,15 @@ export default function Home() {
 
   const handleCopyAll = useCallback(async () => {
     if (altResults.length === 0) return
-    const allText = altResults.map((r) => `${r.filename}:\n${r.altText}`).join('\n\n')
+    const successResults = altResults.filter((r) => r.altText && !r.error)
+    if (successResults.length === 0) {
+      toast({ title: 'Nothing to copy', description: 'No successful alt texts to copy', variant: 'destructive' })
+      return
+    }
+    const allText = successResults.map((r) => `${r.filename}:\n${r.altText}`).join('\n\n')
     try {
       await navigator.clipboard.writeText(allText)
-      toast({ title: 'All copied!', description: `${altResults.length} alt texts copied to clipboard` })
+      toast({ title: 'All copied!', description: `${successResults.length} alt texts copied to clipboard` })
     } catch {
       toast({ title: 'Error', description: 'Failed to copy to clipboard', variant: 'destructive' })
     }

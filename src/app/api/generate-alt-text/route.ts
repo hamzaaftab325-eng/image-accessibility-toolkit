@@ -2,11 +2,11 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getZAI } from '@/lib/zai';
 
 // ── Config ──────────────────────────────────────────────────────────────────
-export const maxDuration = 60; // Allow up to 60s for Vercel Pro; hobby = 10s cap
+export const maxDuration = 60;
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const MAX_IMAGES = 15;
-const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4 MB (Vercel body limit is ~4.5MB)
+const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4 MB
 const ALLOWED_MIME_TYPES = new Set([
   'image/png',
   'image/jpeg',
@@ -31,6 +31,10 @@ const EXTENSION_TO_MIME: Record<string, string> = {
 
 const ALT_TEXT_PROMPT =
   "Generate a concise, descriptive alt text for this image that would be suitable for web accessibility. The alt text should describe what's visually present in the image in 1-2 sentences. Be specific about objects, people, actions, and context. Do not start with 'Image of' or 'Picture of'.";
+
+// Retry config for rate limits
+const MAX_RETRIES = 3;
+const RETRY_BASE_DELAY_MS = 2000; // Start with 2s, double each retry
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface AltTextResult {
@@ -86,7 +90,14 @@ function validateFile(file: File): { mimeType: string } | { error: string } {
   return { mimeType };
 }
 
-async function generateAltText(
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/**
+ * Generate alt text for a single image with retry logic for rate limits (429).
+ */
+async function generateAltTextWithRetry(
   zai: Awaited<ReturnType<typeof getZAI>>,
   file: File,
   mimeType: string
@@ -94,32 +105,56 @@ async function generateAltText(
   const arrayBuffer = await file.arrayBuffer();
   const base64Image = arrayBufferToBase64(arrayBuffer);
 
-  const response = await zai.chat.completions.createVision({
-    messages: [
-      {
-        role: 'user',
-        content: [
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const response = await zai.chat.completions.createVision({
+        messages: [
           {
-            type: 'text',
-            text: ALT_TEXT_PROMPT,
-          },
-          {
-            type: 'image_url',
-            image_url: {
-              url: `data:${mimeType};base64,${base64Image}`,
-            },
+            role: 'user',
+            content: [
+              {
+                type: 'text',
+                text: ALT_TEXT_PROMPT,
+              },
+              {
+                type: 'image_url',
+                image_url: {
+                  url: `data:${mimeType};base64,${base64Image}`,
+                },
+              },
+            ],
           },
         ],
-      },
-    ],
-    thinking: { type: 'disabled' },
-  });
+        thinking: { type: 'disabled' },
+      });
 
-  const altText = response.choices[0]?.message?.content;
-  if (!altText || typeof altText !== 'string') {
-    throw new Error('VLM returned an empty or invalid response');
+      const altText = response.choices[0]?.message?.content;
+      if (!altText || typeof altText !== 'string') {
+        throw new Error('VLM returned an empty or invalid response');
+      }
+      return altText.trim();
+    } catch (err) {
+      lastError = err instanceof Error ? err : new Error(String(err));
+      const is429 =
+        lastError.message.includes('429') ||
+        lastError.message.toLowerCase().includes('too many requests');
+
+      if (is429 && attempt < MAX_RETRIES) {
+        const delay = RETRY_BASE_DELAY_MS * Math.pow(2, attempt);
+        console.log(
+          `[alt-text] Rate limited on attempt ${attempt + 1}/${MAX_RETRIES} for ${file.name}. Retrying in ${delay}ms...`
+        );
+        await sleep(delay);
+        continue;
+      }
+
+      throw lastError;
+    }
   }
-  return altText.trim();
+
+  throw lastError || new Error('Failed after all retries');
 }
 
 // ── Route Handler ────────────────────────────────────────────────────────────
@@ -187,33 +222,32 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // Process images in parallel
-  const processingResults = await Promise.allSettled(
-    validated.map(async ({ file, mimeType }) => {
-      const altText = await generateAltText(zai, file, mimeType);
-      return { filename: file.name, altText } as AltTextResult;
-    })
-  );
-
+  // Process images SEQUENTIALLY to avoid rate limits (429)
   const results: AltTextResult[] = [];
 
-  for (const settled of processingResults) {
-    if (settled.status === 'fulfilled') {
-      results.push(settled.value);
-    } else {
-      const idx = processingResults.indexOf(settled);
-      const failedFile = validated[idx];
+  for (let i = 0; i < validated.length; i++) {
+    const { file, mimeType } = validated[i];
+
+    try {
+      const altText = await generateAltTextWithRetry(zai, file, mimeType);
+      results.push({ filename: file.name, altText });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error generating alt text';
+      console.error(`[alt-text] Failed for ${file.name}:`, message);
       results.push({
-        filename: failedFile?.file.name ?? 'unknown',
+        filename: file.name,
         altText: '',
-        error:
-          settled.reason instanceof Error
-            ? settled.reason.message
-            : 'Unknown error generating alt text',
+        error: message,
       });
+    }
+
+    // Add a small delay between images to prevent rate limiting
+    if (i < validated.length - 1) {
+      await sleep(500);
     }
   }
 
+  // Append validation errors
   for (const ve of validationErrors) {
     results.push({ filename: ve.filename, altText: '', error: ve.error });
   }
