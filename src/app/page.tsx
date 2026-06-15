@@ -68,7 +68,7 @@ const ACCEPTED_TYPES = [
 ]
 
 const MAX_FILES = 15
-const MAX_FILE_SIZE = 10 * 1024 * 1024 // 10MB
+const MAX_FILE_SIZE = 4 * 1024 * 1024 // 4MB (Vercel body limit)
 
 const FORMAT_OPTIONS = [
   { value: 'webp', label: 'WebP', mime: 'image/webp' },
@@ -213,7 +213,7 @@ function DropZone({
             </p>
           </div>
           <p className="text-xs text-muted-foreground/70">
-            PNG, JPEG, WebP, GIF, BMP, TIFF, AVIF · Up to {MAX_FILES} files · 10MB each
+            PNG, JPEG, WebP, GIF, BMP, TIFF, AVIF · Up to {MAX_FILES} files · 4MB each
           </p>
         </motion.div>
       </div>
@@ -464,7 +464,7 @@ export default function Home() {
         if (file.size > MAX_FILE_SIZE) {
           toast({
             title: 'File too large',
-            description: `${file.name} exceeds the 10MB limit`,
+            description: `${file.name} exceeds the 4MB limit`,
             variant: 'destructive',
           })
           continue

@@ -1,9 +1,12 @@
-import ZAI from 'z-ai-web-dev-sdk';
 import { NextRequest, NextResponse } from 'next/server';
+import { getZAI } from '@/lib/zai';
+
+// ── Config ──────────────────────────────────────────────────────────────────
+export const maxDuration = 60; // Allow up to 60s for Vercel Pro; hobby = 10s cap
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const MAX_IMAGES = 15;
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4 MB (Vercel body limit is ~4.5MB)
 const ALLOWED_MIME_TYPES = new Set([
   'image/png',
   'image/jpeg',
@@ -43,31 +46,19 @@ interface ValidationError {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
-/**
- * Resolve the MIME type for a file, falling back from the browser-provided
- * type to an extension-based lookup.
- */
 function resolveMimeType(file: File): string | null {
-  // 1. Trust the browser-supplied type if it's in our allow-list
   if (file.type && ALLOWED_MIME_TYPES.has(file.type)) {
     return file.type;
   }
-
-  // 2. Fall back to extension-based detection
   const ext = file.name.split('.').pop()?.toLowerCase();
   if (ext && ext in EXTENSION_TO_MIME) {
     return EXTENSION_TO_MIME[ext];
   }
-
   return null;
 }
 
-/**
- * Convert an ArrayBuffer to a base64-encoded string.
- */
 function arrayBufferToBase64(buffer: ArrayBuffer): string {
   const bytes = new Uint8Array(buffer);
-  // Process in chunks to avoid call-stack overflow on very large files
   const chunkSize = 8192;
   let binary = '';
   for (let i = 0; i < bytes.length; i += chunkSize) {
@@ -77,35 +68,26 @@ function arrayBufferToBase64(buffer: ArrayBuffer): string {
   return btoa(binary);
 }
 
-/**
- * Validate a single file and return either a resolved MIME type or an error.
- */
 function validateFile(file: File): { mimeType: string } | { error: string } {
   if (file.size === 0) {
     return { error: 'File is empty' };
   }
-
   if (file.size > MAX_FILE_SIZE) {
     return {
       error: `File exceeds maximum size of ${MAX_FILE_SIZE / 1024 / 1024}MB`,
     };
   }
-
   const mimeType = resolveMimeType(file);
   if (!mimeType) {
     return {
       error: `Unsupported file type. Allowed: ${[...ALLOWED_MIME_TYPES].join(', ')}`,
     };
   }
-
   return { mimeType };
 }
 
-/**
- * Generate alt text for a single image using the VLM.
- */
 async function generateAltText(
-  zai: ZAI,
+  zai: Awaited<ReturnType<typeof getZAI>>,
   file: File,
   mimeType: string
 ): Promise<string> {
@@ -137,14 +119,12 @@ async function generateAltText(
   if (!altText || typeof altText !== 'string') {
     throw new Error('VLM returned an empty or invalid response');
   }
-
   return altText.trim();
 }
 
 // ── Route Handler ────────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  // ── Parse FormData ───────────────────────────────────────────────────────
   let formData: FormData;
   try {
     formData = await request.formData();
@@ -155,7 +135,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // ── Extract image files ──────────────────────────────────────────────────
   const rawFiles = formData.getAll('images');
 
   if (rawFiles.length === 0) {
@@ -165,7 +144,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // Filter out non-File entries (e.g. strings from form fields)
   const files = rawFiles.filter(
     (entry): entry is File => entry instanceof File
   );
@@ -184,7 +162,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // ── Validate each file ──────────────────────────────────────────────────
+  // Validate each file
   const validated: { file: File; mimeType: string }[] = [];
   const validationErrors: ValidationError[] = [];
 
@@ -197,17 +175,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  // ── Process valid images in parallel ─────────────────────────────────────
-  let zai: ZAI;
+  // Initialize VLM
+  let zai: Awaited<ReturnType<typeof getZAI>>;
   try {
-    zai = await ZAI.create();
-  } catch {
+    zai = await getZAI();
+  } catch (err) {
+    console.error('[/api/generate-alt-text] ZAI init failed:', err);
     return NextResponse.json(
-      { error: 'Failed to initialize the vision model service.' },
+      { error: 'Failed to initialize the vision model service. Please check server configuration.' },
       { status: 500 }
     );
   }
 
+  // Process images in parallel
   const processingResults = await Promise.allSettled(
     validated.map(async ({ file, mimeType }) => {
       const altText = await generateAltText(zai, file, mimeType);
@@ -215,14 +195,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     })
   );
 
-  // ── Merge results ───────────────────────────────────────────────────────
   const results: AltTextResult[] = [];
 
   for (const settled of processingResults) {
     if (settled.status === 'fulfilled') {
       results.push(settled.value);
     } else {
-      // We lost the filename inside the rejection – scan validated array by index
       const idx = processingResults.indexOf(settled);
       const failedFile = validated[idx];
       results.push({
@@ -236,7 +214,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
   }
 
-  // Append validation errors so the client knows which files were rejected
   for (const ve of validationErrors) {
     results.push({ filename: ve.filename, altText: '', error: ve.error });
   }

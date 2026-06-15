@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
 import sharp from 'sharp';
 
+// ── Config ──────────────────────────────────────────────────────────────────
+export const maxDuration = 60;
+
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
@@ -25,7 +28,7 @@ interface FormatConfig {
 // ---------------------------------------------------------------------------
 
 const MAX_FILES = 15;
-const MAX_FILE_SIZE_BYTES = 10 * 1024 * 1024; // 10 MB
+const MAX_FILE_SIZE_BYTES = 4 * 1024 * 1024; // 4 MB (Vercel body limit)
 
 const SUPPORTED_FORMATS: Record<string, FormatConfig> = {
   webp: { format: 'webp', options: { quality: 80 }, mimeType: 'image/webp' },
@@ -59,7 +62,7 @@ async function convertImage(
 
   if (originalSize > MAX_FILE_SIZE_BYTES) {
     throw new Error(
-      `File "${file.name}" exceeds the 10 MB size limit (${(originalSize / 1024 / 1024).toFixed(2)} MB).`,
+      `File "${file.name}" exceeds the 4 MB size limit (${(originalSize / 1024 / 1024).toFixed(2)} MB).`,
     );
   }
 
@@ -120,7 +123,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     // ---- Collect image files ---------------------------------------------
     const imageFiles: File[] = [];
 
-    // FormData.getAll handles multiple files under the same field name
     const allImages = formData.getAll('images');
 
     for (const entry of allImages) {
@@ -162,7 +164,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       }
     });
 
-    // If every image failed, return a 422 so the caller knows nothing succeeded
     if (results.length === 0 && errors.length > 0) {
       return NextResponse.json(
         { error: 'All images failed to convert.', details: errors },
@@ -175,7 +176,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       ...(errors.length > 0 ? { warnings: errors } : {}),
     });
   } catch (error) {
-    // Unexpected / unhandled errors
     const message =
       error instanceof Error ? error.message : 'An unexpected error occurred.';
 
