@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import sharp from 'sharp';
 
 // ── Config ──────────────────────────────────────────────────────────────────
-export const maxDuration = 60;
+export const maxDuration = 10; // Hobby tier max is 10s
 
 // ---------------------------------------------------------------------------
 // Types

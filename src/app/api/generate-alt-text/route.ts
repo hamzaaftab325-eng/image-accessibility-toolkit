@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getZAI, generateAltTextDirect, isVercel } from '@/lib/zai';
 
 // ── Config ──────────────────────────────────────────────────────────────────
-export const maxDuration = 60;
+export const maxDuration = 10; // Hobby tier max is 10s
 
 // ── Constants ────────────────────────────────────────────────────────────────
 const MAX_FILE_SIZE = 4 * 1024 * 1024; // 4 MB
@@ -31,9 +31,9 @@ const EXTENSION_TO_MIME: Record<string, string> = {
 const ALT_TEXT_PROMPT =
   "Generate a concise, descriptive alt text for this image that would be suitable for web accessibility. The alt text should describe what's visually present in the image in 1-2 sentences. Be specific about objects, people, actions, and context. Do not start with 'Image of' or 'Picture of'.";
 
-// Retry config for rate limits
-const MAX_RETRIES = 3;
-const RETRY_BASE_DELAY_MS = 2000;
+// Retry config for rate limits (keep within 10s Vercel Hobby limit)
+const MAX_RETRIES = 2;
+const RETRY_BASE_DELAY_MS = 1500;
 
 // ── Types ────────────────────────────────────────────────────────────────────
 interface AltTextResult {
