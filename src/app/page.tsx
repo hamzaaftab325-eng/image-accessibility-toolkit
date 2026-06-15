@@ -513,8 +513,7 @@ export default function Home() {
     try {
       const formData = new FormData()
       for (const uf of altFiles) {
-        const base64 = await fileToBase64(uf.file)
-        formData.append('images', base64)
+        formData.append('images', uf.file)
       }
 
       // Simulate progress
@@ -574,8 +573,7 @@ export default function Home() {
     try {
       const formData = new FormData()
       for (const uf of convertFiles) {
-        const base64 = await fileToBase64(uf.file)
-        formData.append('images', base64)
+        formData.append('images', uf.file)
       }
       formData.append('format', convertFormat)
 
