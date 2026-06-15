@@ -52,3 +52,19 @@ prompt
 server.log
 # Skills directory
 /skills/
+
+# Database
+/db/
+*.db
+
+# Download folder
+/download/
+
+# Examples
+/examples/
+
+# Mini services
+/mini-services/
+
+# Worklog
+worklog.md
