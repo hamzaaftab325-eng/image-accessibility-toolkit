@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getZAI } from '@/lib/zai';
+import { getZAI, generateAltTextDirect, isVercel } from '@/lib/zai';
 
 // ── Config ──────────────────────────────────────────────────────────────────
 export const maxDuration = 60;
@@ -72,9 +72,9 @@ function sleep(ms: number): Promise<void> {
 
 /**
  * Generate alt text for a single image with retry logic for rate limits (429).
+ * Uses SDK locally, direct fetch on Vercel.
  */
 async function generateAltTextWithRetry(
-  zai: Awaited<ReturnType<typeof getZAI>>,
   file: File,
   mimeType: string
 ): Promise<string> {
@@ -85,6 +85,18 @@ async function generateAltTextWithRetry(
 
   for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
     try {
+      // On Vercel, use direct API call to avoid filesystem issues
+      if (isVercel()) {
+        const altText = await generateAltTextDirect(
+          base64Image,
+          mimeType,
+          ALT_TEXT_PROMPT
+        );
+        return altText;
+      }
+
+      // Local: use ZAI SDK
+      const zai = await getZAI();
       const response = await zai.chat.completions.createVision({
         messages: [
           {
@@ -155,7 +167,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // Get first valid file (frontend now sends one at a time)
+  // Get valid files
   const files = rawFiles.filter(
     (entry): entry is File => entry instanceof File
   );
@@ -168,7 +180,6 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   // Process each file (supports both single and batch)
-  const zai: Awaited<ReturnType<typeof getZAI>> = await getZAI();
   const results: AltTextResult[] = [];
 
   for (const file of files) {
@@ -190,7 +201,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     // Generate alt text with retry
     try {
-      const altText = await generateAltTextWithRetry(zai, file, mimeType);
+      const altText = await generateAltTextWithRetry(file, mimeType);
       results.push({ filename: file.name, altText });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error generating alt text';

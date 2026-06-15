@@ -69,3 +69,5 @@ server.log
 # Worklog
 worklog.mdtool-results/
 upload/
+tool-results/
+dev.log

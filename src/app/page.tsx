@@ -15,11 +15,12 @@ import {
   X,
   AlertCircle,
   ArrowRight,
-  Type,
-  Zap,
   Eye,
   FileDown,
   Trash2,
+  ChevronDown,
+  Zap,
+  Globe,
 } from 'lucide-react'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Card, CardContent } from '@/components/ui/card'
@@ -34,7 +35,6 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { ScrollArea } from '@/components/ui/scroll-area'
-import { Separator } from '@/components/ui/separator'
 import { toast } from '@/hooks/use-toast'
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -95,15 +95,6 @@ function formatFileSize(bytes: number): string {
 
 function getFileExtension(filename: string): string {
   return filename.split('.').pop()?.toUpperCase() || 'IMG'
-}
-
-function fileToBase64(file: File): Promise<string> {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader()
-    reader.readAsDataURL(file)
-    reader.onload = () => resolve(reader.result as string)
-    reader.onerror = (error) => reject(error)
-  })
 }
 
 // ─── Drop Zone Component ─────────────────────────────────────────────────────
@@ -167,11 +158,9 @@ function DropZone({
     return (
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-            <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-0 font-medium">
-              {files.length} / {MAX_FILES} files
-            </Badge>
-          </div>
+          <Badge className="bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-0 font-medium">
+            {files.length} / {MAX_FILES} files
+          </Badge>
           <Button
             variant="ghost"
             size="sm"
@@ -184,24 +173,23 @@ function DropZone({
           </Button>
         </div>
 
-        <ScrollArea className="max-h-40">
-          <div className="flex flex-wrap gap-2">
+        <ScrollArea className="max-h-48">
+          <div className="grid grid-cols-5 sm:grid-cols-8 gap-2">
             {files.map((uf) => (
               <div
                 key={uf.id}
-                className="relative group rounded-lg overflow-hidden border bg-muted/30 shadow-sm"
+                className="relative group rounded-lg overflow-hidden border bg-muted/30 shadow-sm aspect-square"
               >
                 <img
                   src={uf.preview}
                   alt={uf.file.name}
-                  className="size-16 object-cover"
+                  className="w-full h-full object-cover"
                 />
-                <Badge
-                  variant="secondary"
-                  className="absolute bottom-0.5 right-0.5 text-[8px] px-1 py-0 h-4 leading-none"
-                >
-                  {getFileExtension(uf.file.name)}
-                </Badge>
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/30 transition-colors flex items-center justify-center">
+                  <span className="text-white text-[9px] font-bold opacity-0 group-hover:opacity-100 transition-opacity bg-black/50 px-1 rounded">
+                    {getFileExtension(uf.file.name)}
+                  </span>
+                </div>
               </div>
             ))}
           </div>
@@ -236,8 +224,8 @@ function DropZone({
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
         onClick={handleClick}
-        animate={isDragOver ? { scale: 1.02, borderColor: '#10b981' } : { scale: 1, borderColor: '#e5e7eb' }}
-        className={`relative cursor-pointer rounded-xl border-2 border-dashed p-8 sm:p-10 text-center transition-colors duration-200 ${
+        animate={isDragOver ? { scale: 1.01, borderColor: '#10b981' } : { scale: 1, borderColor: '#e5e7eb' }}
+        className={`relative cursor-pointer rounded-2xl border-2 border-dashed p-10 sm:p-14 text-center transition-colors duration-200 ${
           isDragOver
             ? 'bg-emerald-50/50 dark:bg-emerald-950/20 border-emerald-400'
             : 'bg-muted/20 hover:bg-muted/40 border-muted-foreground/25'
@@ -253,22 +241,22 @@ function DropZone({
         />
         <motion.div
           animate={isDragOver ? { y: -5 } : { y: 0 }}
-          className="flex flex-col items-center gap-3"
+          className="flex flex-col items-center gap-4"
         >
-          <div className={`size-12 rounded-full flex items-center justify-center transition-colors ${
+          <div className={`size-16 rounded-2xl flex items-center justify-center transition-colors ${
             isDragOver ? 'bg-emerald-100 dark:bg-emerald-900/40' : 'bg-muted/50'
           }`}>
-            <Upload className={`size-5 ${isDragOver ? 'text-emerald-600' : 'text-muted-foreground'}`} />
+            <Upload className={`size-7 ${isDragOver ? 'text-emerald-600' : 'text-muted-foreground'}`} />
           </div>
           <div>
-            <p className="text-sm font-medium text-foreground">
+            <p className="text-base font-semibold text-foreground">
               Drag & drop images here
             </p>
-            <p className="text-xs text-muted-foreground mt-1">
+            <p className="text-sm text-muted-foreground mt-1">
               or <span className="text-emerald-600 font-medium underline underline-offset-2">browse files</span>
             </p>
           </div>
-          <p className="text-[11px] text-muted-foreground/60">
+          <p className="text-xs text-muted-foreground/60">
             PNG, JPEG, WebP, GIF, BMP, TIFF, AVIF · Up to {MAX_FILES} files · 4MB each
           </p>
         </motion.div>
@@ -277,12 +265,14 @@ function DropZone({
   )
 }
 
-// ─── Alt Text Result Card (Image Left, Content Right) ────────────────────────
+// ─── Alt Text Result Card (Full Image Left, Content Right) ──────────────────
 
 function AltTextCard({ result, preview, index }: { result: AltTextResult; preview?: string; index: number }) {
   const [copied, setCopied] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   const hasError = !!result.error
   const hasAltText = !!result.altText
+  const isLong = result.altText.length > 150
 
   const handleCopy = useCallback(async () => {
     if (!hasAltText) return
@@ -298,14 +288,16 @@ function AltTextCard({ result, preview, index }: { result: AltTextResult; previe
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 15 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.04, duration: 0.3 }}
+      initial={{ opacity: 0, y: 20, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ delay: index * 0.05, duration: 0.35, ease: 'easeOut' }}
     >
-      <div className={`rounded-xl border bg-card overflow-hidden transition-all duration-200 hover:shadow-md ${hasError ? 'border-destructive/30' : 'border-border/60'}`}>
+      <div className={`rounded-2xl border bg-card overflow-hidden transition-all duration-200 hover:shadow-lg ${
+        hasError ? 'border-red-200 dark:border-red-900/50' : 'border-border/60 hover:border-emerald-200 dark:hover:border-emerald-800/50'
+      }`}>
         <div className="flex flex-col sm:flex-row">
-          {/* Image thumbnail - left side */}
-          <div className="shrink-0 sm:w-32 md:w-40 h-28 sm:h-auto bg-muted/30 relative overflow-hidden">
+          {/* Full image thumbnail - left side */}
+          <div className="shrink-0 sm:w-52 md:w-64 lg:w-72 h-48 sm:h-auto sm:min-h-[200px] bg-muted/30 relative overflow-hidden">
             {preview ? (
               <img
                 src={preview}
@@ -313,60 +305,84 @@ function AltTextCard({ result, preview, index }: { result: AltTextResult; previe
                 className="w-full h-full object-cover"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center">
+              <div className="w-full h-full min-h-[160px] flex items-center justify-center bg-gradient-to-br from-muted/50 to-muted/20">
                 {hasError ? (
-                  <AlertCircle className="size-8 text-destructive/50" />
+                  <div className="flex flex-col items-center gap-2">
+                    <AlertCircle className="size-10 text-red-300 dark:text-red-700" />
+                    <span className="text-xs text-muted-foreground">Failed</span>
+                  </div>
                 ) : (
-                  <ImageIcon className="size-8 text-muted-foreground/30" />
+                  <ImageIcon className="size-10 text-muted-foreground/20" />
                 )}
               </div>
             )}
+            {/* Extension badge overlay */}
             <Badge
               variant="secondary"
-              className="absolute top-2 left-2 text-[9px] px-1.5 py-0 h-5 leading-none font-semibold bg-black/60 text-white border-0"
+              className="absolute top-3 left-3 text-[10px] px-2 py-0.5 h-6 leading-none font-bold bg-black/60 text-white border-0 backdrop-blur-sm"
             >
               {getFileExtension(result.filename)}
             </Badge>
           </div>
 
           {/* Content - right side */}
-          <div className="flex-1 min-w-0 p-4 flex flex-col justify-between">
+          <div className="flex-1 min-w-0 p-5 sm:p-6 flex flex-col justify-between gap-3">
             <div>
-              <div className="flex items-center gap-2 mb-2">
+              <div className="flex items-center gap-2 mb-3">
                 <p className="text-sm font-semibold truncate text-foreground">{result.filename}</p>
                 {hasError && (
-                  <Badge variant="destructive" className="text-[9px] shrink-0 px-1.5 h-5">Failed</Badge>
+                  <Badge variant="destructive" className="text-[10px] shrink-0 px-2 h-5">Failed</Badge>
+                )}
+                {!hasError && hasAltText && (
+                  <Badge className="text-[10px] shrink-0 px-2 h-5 bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400 border-0">
+                    Generated
+                  </Badge>
                 )}
               </div>
               {hasError ? (
-                <p className="text-xs text-destructive/80 leading-relaxed">{result.error}</p>
+                <div className="bg-red-50 dark:bg-red-950/30 rounded-lg p-3 border border-red-100 dark:border-red-900/50">
+                  <p className="text-sm text-red-600 dark:text-red-400 leading-relaxed">{result.error}</p>
+                </div>
               ) : hasAltText ? (
-                <p className="text-sm text-muted-foreground leading-relaxed line-clamp-3">{result.altText}</p>
+                <div>
+                  <p className={`text-sm text-foreground/80 leading-relaxed ${!expanded && isLong ? 'line-clamp-3' : ''}`}>
+                    {result.altText}
+                  </p>
+                  {isLong && (
+                    <button
+                      onClick={() => setExpanded(!expanded)}
+                      className="text-xs text-emerald-600 hover:text-emerald-700 mt-1.5 font-medium flex items-center gap-1"
+                    >
+                      {expanded ? 'Show less' : 'Read more'}
+                      <ChevronDown className={`size-3 transition-transform ${expanded ? 'rotate-180' : ''}`} />
+                    </button>
+                  )}
+                </div>
               ) : (
                 <div className="flex items-center gap-2 text-muted-foreground/50">
-                  <Loader2 className="size-3 animate-spin" />
-                  <span className="text-xs">Generating...</span>
+                  <Loader2 className="size-4 animate-spin" />
+                  <span className="text-sm">Generating alt text...</span>
                 </div>
               )}
             </div>
             {hasAltText && (
-              <div className="flex items-center justify-between mt-3 pt-2 border-t border-border/40">
-                <span className="text-[10px] text-muted-foreground/50">{result.altText.length} characters</span>
+              <div className="flex items-center justify-between pt-3 border-t border-border/40">
+                <span className="text-[11px] text-muted-foreground/50">{result.altText.length} characters</span>
                 <Button
                   variant="ghost"
                   size="sm"
                   onClick={handleCopy}
-                  className="h-7 text-xs gap-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                  className="h-8 text-xs gap-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 font-medium"
                 >
                   {copied ? (
                     <>
-                      <Check className="size-3" />
-                      Copied
+                      <Check className="size-3.5" />
+                      Copied!
                     </>
                   ) : (
                     <>
-                      <Copy className="size-3" />
-                      Copy
+                      <Copy className="size-3.5" />
+                      Copy Alt Text
                     </>
                   )}
                 </Button>
@@ -379,7 +395,7 @@ function AltTextCard({ result, preview, index }: { result: AltTextResult; previe
   )
 }
 
-// ─── Convert Result Card (Image Left, Stats Right) ──────────────────────────
+// ─── Convert Result Card (Full Image Left, Stats Right) ─────────────────────
 
 function ConvertResultCard({ result, preview, index }: { result: ConvertResult; preview?: string; index: number }) {
   const sizeDiff = result.originalSize - result.convertedSize
@@ -407,14 +423,14 @@ function ConvertResultCard({ result, preview, index }: { result: ConvertResult; 
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 15 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: index * 0.04, duration: 0.3 }}
+      initial={{ opacity: 0, y: 20, scale: 0.98 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      transition={{ delay: index * 0.05, duration: 0.35, ease: 'easeOut' }}
     >
-      <div className="rounded-xl border border-border/60 bg-card overflow-hidden transition-all duration-200 hover:shadow-md">
+      <div className="rounded-2xl border border-border/60 bg-card overflow-hidden transition-all duration-200 hover:shadow-lg hover:border-emerald-200 dark:hover:border-emerald-800/50">
         <div className="flex flex-col sm:flex-row">
           {/* Converted image - left */}
-          <div className="shrink-0 sm:w-32 md:w-40 h-28 sm:h-auto bg-muted/30 relative overflow-hidden">
+          <div className="shrink-0 sm:w-52 md:w-64 lg:w-72 h-48 sm:h-auto sm:min-h-[200px] bg-muted/30 relative overflow-hidden">
             {preview ? (
               <img
                 src={preview}
@@ -422,47 +438,54 @@ function ConvertResultCard({ result, preview, index }: { result: ConvertResult; 
                 className="w-full h-full object-cover"
               />
             ) : (
-              <div className="w-full h-full flex items-center justify-center">
-                <FileImage className="size-8 text-muted-foreground/30" />
+              <div className="w-full h-full min-h-[160px] flex items-center justify-center bg-gradient-to-br from-muted/50 to-muted/20">
+                <FileImage className="size-10 text-muted-foreground/20" />
               </div>
             )}
             <Badge
               variant="secondary"
-              className="absolute top-2 left-2 text-[9px] px-1.5 py-0 h-5 leading-none font-semibold bg-black/60 text-white border-0"
+              className="absolute top-3 left-3 text-[10px] px-2 py-0.5 h-6 leading-none font-bold bg-black/60 text-white border-0 backdrop-blur-sm"
             >
               {getFileExtension(result.convertedFilename)}
             </Badge>
           </div>
 
           {/* Stats - right */}
-          <div className="flex-1 min-w-0 p-4 flex flex-col justify-between">
+          <div className="flex-1 min-w-0 p-5 sm:p-6 flex flex-col justify-between gap-3">
             <div>
-              <p className="text-sm font-semibold truncate text-foreground mb-2">{result.convertedFilename}</p>
-              <div className="flex items-center gap-3 text-xs">
-                <span className="text-muted-foreground">{formatFileSize(result.originalSize)}</span>
-                <ArrowRight className="size-3 text-muted-foreground/40" />
-                <span className="font-medium text-foreground">{formatFileSize(result.convertedSize)}</span>
+              <p className="text-sm font-semibold truncate text-foreground mb-4">{result.convertedFilename}</p>
+              <div className="flex items-center gap-3">
+                <div className="flex-1 bg-muted/30 rounded-lg p-3 text-center">
+                  <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium mb-1">Original</p>
+                  <p className="text-sm font-bold text-foreground">{formatFileSize(result.originalSize)}</p>
+                </div>
+                <ArrowRight className="size-4 text-muted-foreground/40 shrink-0" />
+                <div className="flex-1 bg-emerald-50 dark:bg-emerald-950/30 rounded-lg p-3 text-center border border-emerald-100 dark:border-emerald-800/50">
+                  <p className="text-[10px] text-emerald-600 dark:text-emerald-400 uppercase tracking-wider font-medium mb-1">Converted</p>
+                  <p className="text-sm font-bold text-emerald-700 dark:text-emerald-300">{formatFileSize(result.convertedSize)}</p>
+                </div>
+              </div>
+              <div className="mt-3 flex justify-center">
                 <Badge
-                  variant="secondary"
-                  className={`text-[10px] h-5 px-1.5 border-0 ${
+                  className={`text-[11px] h-6 px-2.5 border-0 font-semibold ${
                     isSmaller
                       ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-400'
                       : 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-400'
                   }`}
                 >
-                  {isSmaller ? '' : '+'}{sizeChangePercent}%
+                  {isSmaller ? '↓' : '↑'} {isSmaller ? '' : '+'}{sizeChangePercent}% size
                 </Badge>
               </div>
             </div>
-            <div className="mt-3 pt-2 border-t border-border/40">
+            <div className="pt-3 border-t border-border/40">
               <Button
                 variant="ghost"
                 size="sm"
                 onClick={handleDownload}
-                className="h-7 text-xs gap-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30"
+                className="h-8 text-xs gap-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-950/30 font-medium"
               >
-                <FileDown className="size-3" />
-                Download
+                <FileDown className="size-3.5" />
+                Download Converted Image
               </Button>
             </div>
           </div>
@@ -592,7 +615,8 @@ export default function Home() {
         })
 
         if (!response.ok) {
-          throw new Error(`Server error: ${response.status}`)
+          const errorData = await response.json().catch(() => ({}))
+          throw new Error(errorData.error || `Server error: ${response.status}`)
         }
 
         const data = await response.json()
@@ -716,21 +740,30 @@ export default function Home() {
   return (
     <div className="min-h-screen flex flex-col bg-background">
       {/* ── Header ─────────────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-40 w-full border-b bg-background/80 backdrop-blur-lg supports-[backdrop-filter]:bg-background/60">
+      <header className="sticky top-0 z-40 w-full border-b bg-background/80 backdrop-blur-xl supports-[backdrop-filter]:bg-background/60">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-14">
+          <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
-              <img src="/logo.svg" alt="AltForge" className="size-8 rounded-lg" />
+              <div className="size-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-md shadow-emerald-500/20">
+                <Eye className="size-5 text-white" />
+              </div>
               <div>
-                <h1 className="text-base font-bold tracking-tight text-foreground">
+                <h1 className="text-lg font-bold tracking-tight text-foreground">
                   AltForge
                 </h1>
+                <p className="text-[10px] text-muted-foreground -mt-0.5 hidden sm:block">AI-Powered Image Accessibility</p>
               </div>
             </div>
-            <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800 text-[10px]">
-              <Zap className="size-3 mr-1" />
-              AI-Powered
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 border-emerald-200 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800 text-[10px] gap-1">
+                <Zap className="size-3" />
+                AI-Powered
+              </Badge>
+              <Badge variant="outline" className="text-[10px] gap-1 text-muted-foreground">
+                <Globe className="size-3" />
+                Free
+              </Badge>
+            </div>
           </div>
         </div>
       </header>
@@ -739,24 +772,34 @@ export default function Home() {
       <main className="flex-1 w-full">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-6 md:py-8">
 
+          {/* Hero text */}
+          <div className="text-center mb-8">
+            <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-foreground">
+              Image Accessibility Made <span className="text-emerald-600">Simple</span>
+            </h2>
+            <p className="text-sm text-muted-foreground mt-2 max-w-lg mx-auto">
+              Generate descriptive alt text with AI and convert image formats instantly. Make your web content accessible to everyone.
+            </p>
+          </div>
+
           {/* Tabbed interface */}
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid w-full max-w-md mx-auto grid-cols-2 h-11 bg-muted/50">
-              <TabsTrigger value="alt-text" className="gap-2 text-sm data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
+            <TabsList className="grid w-full max-w-sm mx-auto grid-cols-2 h-12 bg-muted/50 rounded-xl">
+              <TabsTrigger value="alt-text" className="gap-2 text-sm rounded-lg data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-emerald-500/20 transition-all">
                 <Eye className="size-4" />
                 Alt Text Generator
               </TabsTrigger>
-              <TabsTrigger value="converter" className="gap-2 text-sm data-[state=active]:bg-emerald-600 data-[state=active]:text-white">
+              <TabsTrigger value="converter" className="gap-2 text-sm rounded-lg data-[state=active]:bg-emerald-600 data-[state=active]:text-white data-[state=active]:shadow-md data-[state=active]:shadow-emerald-500/20 transition-all">
                 <FileDown className="size-4" />
                 Format Converter
               </TabsTrigger>
             </TabsList>
 
             {/* ── Alt Text Generator Tab ─────────────────────────────────────── */}
-            <TabsContent value="alt-text" className="space-y-4">
+            <TabsContent value="alt-text" className="space-y-5">
               {/* Upload area */}
-              <Card className="border-border/40 shadow-sm">
-                <CardContent className="p-5">
+              <Card className="border-border/40 shadow-sm rounded-2xl">
+                <CardContent className="p-6">
                   <DropZone
                     files={altFiles}
                     onFilesSelected={handleAltFilesSelected}
@@ -773,7 +816,7 @@ export default function Home() {
                     size="lg"
                     onClick={handleGenerateAltText}
                     disabled={altLoading}
-                    className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/20 h-12 text-sm font-medium"
+                    className="w-full gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-lg shadow-emerald-500/25 h-13 text-sm font-semibold rounded-xl transition-all"
                   >
                     {altLoading ? (
                       <>
@@ -787,16 +830,16 @@ export default function Home() {
                       </>
                     )}
                   </Button>
-                  {altLoading && <Progress value={altProgress} className="h-1.5" />}
+                  {altLoading && <Progress value={altProgress} className="h-2 rounded-full" />}
                 </div>
               )}
 
               {/* Results */}
               {altResults.length > 0 && (
-                <div className="space-y-4">
+                <div className="space-y-5">
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-semibold text-foreground">Results</h3>
+                      <h3 className="text-base font-bold text-foreground">Results</h3>
                       <Badge variant="secondary" className="text-[10px] h-5">{altResults.length} images</Badge>
                     </div>
                     <div className="flex items-center gap-2">
@@ -804,7 +847,7 @@ export default function Home() {
                         variant="outline"
                         size="sm"
                         onClick={handleCopyAll}
-                        className="h-8 text-xs gap-1.5"
+                        className="h-8 text-xs gap-1.5 rounded-lg"
                       >
                         <Copy className="size-3" />
                         Copy All
@@ -812,7 +855,7 @@ export default function Home() {
                     </div>
                   </div>
 
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {altResults.map((result, i) => (
                       <AltTextCard
                         key={result.filename + i}
@@ -826,7 +869,7 @@ export default function Home() {
                   <Button
                     variant="outline"
                     onClick={() => { setAltFiles([]); setAltResults([]) }}
-                    className="w-full gap-2 h-10 text-sm"
+                    className="w-full gap-2 h-11 text-sm rounded-xl"
                   >
                     <RefreshCw className="size-4" />
                     Start Over
@@ -836,18 +879,18 @@ export default function Home() {
 
               {/* Still generating more results */}
               {altLoading && altResults.length > 0 && (
-                <div className="flex items-center justify-center gap-2 py-3 text-sm text-muted-foreground">
+                <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
                   <Loader2 className="size-4 animate-spin" />
-                  Processing image {altResults.length + 1}...
+                  Processing image {altResults.length + 1} of {altFiles.length}...
                 </div>
               )}
             </TabsContent>
 
             {/* ── Format Converter Tab ───────────────────────────────────────── */}
-            <TabsContent value="converter" className="space-y-4">
+            <TabsContent value="converter" className="space-y-5">
               {/* Upload area */}
-              <Card className="border-border/40 shadow-sm">
-                <CardContent className="p-5">
+              <Card className="border-border/40 shadow-sm rounded-2xl">
+                <CardContent className="p-6">
                   <DropZone
                     files={convertFiles}
                     onFilesSelected={handleConvertFilesSelected}
@@ -859,11 +902,11 @@ export default function Home() {
 
               {/* Format selector + Convert button */}
               {convertFiles.length > 0 && convertResults.length === 0 && (
-                <div className="space-y-3">
-                  <div className="flex items-center justify-center gap-3">
-                    <span className="text-sm text-muted-foreground whitespace-nowrap">Convert to:</span>
+                <div className="space-y-4">
+                  <div className="flex items-center justify-center gap-4">
+                    <span className="text-sm text-muted-foreground whitespace-nowrap font-medium">Convert to:</span>
                     <Select value={convertFormat} onValueChange={setConvertFormat}>
-                      <SelectTrigger className="w-[140px]">
+                      <SelectTrigger className="w-[150px] rounded-lg">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -879,7 +922,7 @@ export default function Home() {
                     size="lg"
                     onClick={handleConvertFormat}
                     disabled={convertLoading}
-                    className="w-full gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-lg shadow-emerald-500/20 h-12 text-sm font-medium"
+                    className="w-full gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-lg shadow-emerald-500/25 h-13 text-sm font-semibold rounded-xl transition-all"
                   >
                     {convertLoading ? (
                       <>
@@ -893,30 +936,32 @@ export default function Home() {
                       </>
                     )}
                   </Button>
-                  {convertLoading && <Progress value={convertProgress} className="h-1.5" />}
+                  {convertLoading && <Progress value={convertProgress} className="h-2 rounded-full" />}
                 </div>
               )}
 
               {/* Conversion results */}
               {convertResults.length > 0 && (
-                <div className="space-y-4">
+                <div className="space-y-5">
                   {/* Stats summary */}
                   <div className="grid grid-cols-3 gap-3">
-                    <div className="rounded-lg border bg-card p-3 text-center">
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Original</p>
-                      <p className="text-sm font-bold text-foreground mt-0.5">{formatFileSize(totalOriginal)}</p>
+                    <div className="rounded-xl border bg-card p-4 text-center shadow-sm">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Original</p>
+                      <p className="text-base font-bold text-foreground mt-1">{formatFileSize(totalOriginal)}</p>
                     </div>
-                    <div className="rounded-lg border bg-card p-3 text-center">
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Converted</p>
-                      <p className="text-sm font-bold text-emerald-600 mt-0.5">{formatFileSize(totalConverted)}</p>
+                    <div className="rounded-xl border bg-emerald-50 dark:bg-emerald-950/30 border-emerald-100 dark:border-emerald-800/50 p-4 text-center shadow-sm">
+                      <p className="text-[10px] text-emerald-600 dark:text-emerald-400 uppercase tracking-wider font-medium">Converted</p>
+                      <p className="text-base font-bold text-emerald-700 dark:text-emerald-300 mt-1">{formatFileSize(totalConverted)}</p>
                     </div>
-                    <div className="rounded-lg border bg-card p-3 text-center">
-                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider">Saved</p>
-                      <p className="text-sm font-bold text-emerald-600 mt-0.5">{totalSavings}%</p>
+                    <div className="rounded-xl border bg-card p-4 text-center shadow-sm">
+                      <p className="text-[10px] text-muted-foreground uppercase tracking-wider font-medium">Saved</p>
+                      <p className={`text-base font-bold mt-1 ${Number(totalSavings) > 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                        {totalSavings}%
+                      </p>
                     </div>
                   </div>
 
-                  <div className="space-y-3">
+                  <div className="space-y-4">
                     {convertResults.map((result, i) => (
                       <ConvertResultCard
                         key={result.convertedFilename + i}
@@ -930,7 +975,7 @@ export default function Home() {
                   <Button
                     variant="outline"
                     onClick={() => { setConvertFiles([]); setConvertResults([]) }}
-                    className="w-full gap-2 h-10 text-sm"
+                    className="w-full gap-2 h-11 text-sm rounded-xl"
                   >
                     <RefreshCw className="size-4" />
                     Start Over
@@ -939,9 +984,9 @@ export default function Home() {
               )}
 
               {convertLoading && convertResults.length > 0 && (
-                <div className="flex items-center justify-center gap-2 py-3 text-sm text-muted-foreground">
+                <div className="flex items-center justify-center gap-2 py-4 text-sm text-muted-foreground">
                   <Loader2 className="size-4 animate-spin" />
-                  Converting image {convertResults.length + 1}...
+                  Converting image {convertResults.length + 1} of {convertFiles.length}...
                 </div>
               )}
             </TabsContent>
@@ -950,15 +995,17 @@ export default function Home() {
       </main>
 
       {/* ── Footer ─────────────────────────────────────────────────────────── */}
-      <footer className="mt-auto border-t bg-muted/20">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-4">
-          <div className="flex flex-col sm:flex-row items-center justify-between gap-2">
+      <footer className="mt-auto border-t bg-muted/30">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-8 py-5">
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3">
             <div className="flex items-center gap-2">
-              <Sparkles className="size-3.5 text-emerald-600 dark:text-emerald-400" />
-              <span className="text-xs font-medium text-foreground">AltForge</span>
+              <div className="size-6 rounded-lg bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center">
+                <Eye className="size-3.5 text-white" />
+              </div>
+              <span className="text-xs font-semibold text-foreground">AltForge</span>
             </div>
             <p className="text-[11px] text-muted-foreground">
-              AI-powered image tools · Built with Next.js & shadcn/ui
+              AI-powered image tools for web accessibility · Built with Next.js
             </p>
             <div className="flex items-center gap-1.5">
               <AlertCircle className="size-3 text-muted-foreground" />
